@@ -1,0 +1,79 @@
+# Configuration ARTEX SOAR. Tout est defensif : les actions visent VOTRE infrastructure.
+#
+# mode: dry_run  -> aucune action perturbatrice (blocage, isolation) n'est reellement executee,
+#                   meme apres approbation : le SOAR journalise la commande qu'il AURAIT lancee.
+# mode: enforce  -> les connecteurs dont dry_run vaut false agissent pour de vrai.
+mode: dry_run
+
+database: data/soar.db
+
+detection:
+  min_score: 30            # score minimal pour ouvrir un incident
+  burst_threshold: 50      # requetes / 10 s depuis une meme source
+  incident_timeout: 3600   # s d'inactivite avant d'ouvrir un nouvel incident pour la meme source
+
+guard:
+  # Jamais bloques : ajoutez vos passerelles, DNS, supervision, VPN d'administration, le SOAR.
+  protected_networks:
+    - 127.0.0.0/8
+    - ::1/128
+    - 169.254.0.0/16
+    - fe80::/10
+    # - 10.0.0.1/32        # passerelle
+  # Pentests autorises (equipe rouge, prestataire) : incident marque "authorized", pas de blocage.
+  authorized_sources: []
+  #  - 203.0.113.50/32
+  authorized_engagements: []   # valeur de "engagement=" dans l'UA ARTEX-Assessment/1.0
+  #  - PENTEST-2026-11
+  max_blocks_per_hour: 50      # au-dela, chaque blocage attend une approbation
+
+# Serveurs de votre infrastructure que le SOAR a le droit d'isoler (toujours apres approbation).
+inventory:
+  hosts: []
+  #  - web01
+  #  - web02
+
+connectors:
+  log:
+    type: log
+    path: data/notifications.log
+  ticket:
+    type: ticket_file
+    directory: data/tickets
+  evidence:
+    type: evidence
+    directory: data/evidence
+    log_files: []            # ex. [/var/log/nginx/access.log]
+    run_host_triage: false   # lance artex_triage.py host si la cible est l'hote local
+    webroots: []
+  nftables:
+    type: nftables
+    dry_run: true            # passez a false (et mode: enforce) apres validation
+    family: inet
+    table: filter
+    set: artex_soar_block
+    set6: artex_soar_block6
+    default_ttl: 86400
+  nginx_deny:
+    type: blocklist_file
+    dry_run: true
+    path: data/blocklist/artex_deny.conf
+    format: nginx            # ou "plain" (une IP par ligne)
+    # reload_command: ["nginx", "-s", "reload"]
+  isolation:
+    type: command
+    dry_run: true
+    argv: ["/usr/local/bin/soar-isolate-host", "{host}", "{incident_id}"]
+  # chat:
+  #   type: webhook
+  #   format: slack          # slack | teams | raw
+  #   url_env: SOAR_WEBHOOK_URL
+  # mail:
+  #   type: email
+  #   host: smtp.example.org
+  #   port: 587
+  #   starttls: true
+  #   from: soar@example.org
+  #   to: [soc@example.org]
+
+playbooks_file: config/playbooks.yml

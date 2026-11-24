@@ -15,6 +15,7 @@ Tout est en lecture seule et strictement défensif.
 | `playbook/PLAYBOOK.md` | Playbook de réponse (préparation, détection, confinement, éradication, retour d'expérience) avec la cartographie MITRE ATT&CK. |
 | `samples/access_demo.log` | Journal synthétique pour tester le script. |
 | `sentinel/` | Adaptation à **Microsoft Sentinel** : 11 règles d'analyse KQL, 4 requêtes de chasse, un classeur et un modèle ARM prêt à déployer. Voir [`sentinel/README.md`](sentinel/README.md). |
+| `soar/` | **ARTEX SOAR** : plateforme de réponse automatisée (API, corrélation, playbooks, connecteurs pare-feu/WAF/isolation/preuves/ticket en dry-run par défaut, docker-compose). Voir [`soar/README.md`](soar/README.md). |
 
 ## Démarrage rapide
 

@@ -1,0 +1,19 @@
+[project]
+name = "artex-soar"
+version = "0.1.0"
+description = "Plateforme SOAR strictement defensive de reponse aux campagnes ARTEX"
+requires-python = ">=3.9"
+dependencies = ["fastapi>=0.110,<1", "uvicorn>=0.29", "PyYAML>=6.0"]
+license = {text = "MIT"}
+
+[project.scripts]
+artex-soar = "artex_soar.cli:main"
+
+[tool.setuptools]
+packages = ["artex_soar", "artex_soar.connectors"]
+
+[tool.setuptools.package-data]
+artex_soar = ["dashboard.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
