@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 *.json.out
+soar/data/
+soar/.env
+.pytest_cache/

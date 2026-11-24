@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ARTEX SOAR</title>
+<style>
+  :root { --bg:#f6f7f9; --fg:#1b1f24; --muted:#5b6470; --card:#fff; --line:#dde1e6;
+          --p1:#b42318; --p2:#b54708; --p3:#175cd3; --ok:#067647; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111418; --fg:#e6e8eb; --muted:#9aa3ad; --card:#1a1e23; --line:#2b3138;
+            --p1:#f97066; --p2:#fdb022; --p3:#84adff; --ok:#47cd89; } }
+  body { margin:0; font:14px/1.45 system-ui, sans-serif; background:var(--bg); color:var(--fg); }
+  header { padding:16px; border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  h1 { font-size:18px; margin:0; } h2 { font-size:15px; margin:20px 0 8px; }
+  main { padding:0 16px 32px; max-width:1200px; margin:auto; }
+  .badge { padding:2px 8px; border-radius:10px; font-weight:600; font-size:12px; border:1px solid currentColor; }
+  .P1 { color:var(--p1); } .P2 { color:var(--p2); } .P3 { color:var(--p3); } .ok { color:var(--ok); }
+  .wrap { overflow-x:auto; background:var(--card); border:1px solid var(--line); border-radius:8px; }
+  table { border-collapse:collapse; width:100%; } td, th { text-align:left; padding:8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; font-size:12px; }
+  button { font:inherit; padding:4px 10px; border-radius:6px; border:1px solid var(--line); background:var(--card); color:var(--fg); cursor:pointer; }
+  button.primary { border-color:var(--ok); color:var(--ok); }
+  input { font:inherit; padding:4px 8px; border-radius:6px; border:1px solid var(--line); background:var(--card); color:var(--fg); }
+  .muted { color:var(--muted); } code { font-size:12px; word-break:break-all; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ARTEX SOAR</h1>
+  <span id="mode" class="badge"></span>
+  <input id="key" type="password" placeholder="Cle API" aria-label="Cle API">
+  <input id="user" placeholder="Votre nom (audit)" aria-label="Utilisateur">
+  <button id="save">Connexion</button>
+  <span id="err" class="P1"></span>
+</header>
+<main>
+  <h2>Actions en attente d'approbation</h2>
+  <div class="wrap"><table><thead><tr><th>Action</th><th>Type</th><th>Incident</th><th>Parametres</th><th>Motif</th><th></th></tr></thead><tbody id="pending"></tbody></table></div>
+  <h2>Incidents</h2>
+  <div class="wrap"><table><thead><tr><th>Gravite</th><th>Source / hote</th><th>Score</th><th>Etape</th><th>Statut</th><th>Indicateurs</th><th>Derniere activite</th><th></th></tr></thead><tbody id="incidents"></tbody></table></div>
+  <h2>Dernieres actions</h2>
+  <div class="wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Connecteur</th><th>Statut</th><th>Detail</th></tr></thead><tbody id="actions"></tbody></table></div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const dt = (t) => t ? new Date(t * 1000).toLocaleString() : "";
+function creds() { try { return [sessionStorage.getItem("soar_key") || "", sessionStorage.getItem("soar_user") || ""]; } catch { return ["", ""]; } }
+async function api(path, opts = {}) {
+  const [k, u] = creds();
+  const r = await fetch(path, { ...opts, headers: { "X-API-Key": k, "X-SOAR-User": u || "dashboard", "Content-Type": "application/json" } });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.status);
+  return r.json();
+}
+async function act(id, verb) { try { await api(`/api/v1/actions/${id}/${verb}`, { method: "POST", body: "{}" }); refresh(); } catch (e) { $("err").textContent = e.message; } }
+async function setStatus(id, s) { try { await api(`/api/v1/incidents/${id}/status`, { method: "POST", body: JSON.stringify({ status: s }) }); refresh(); } catch (e) { $("err").textContent = e.message; } }
+async function refresh() {
+  $("err").textContent = "";
+  try {
+    const h = await (await fetch("/health")).json();
+    $("mode").textContent = h.mode === "enforce" ? "MODE ENFORCE" : "MODE DRY-RUN";
+    $("mode").className = "badge " + (h.mode === "enforce" ? "P1" : "ok");
+    const [pend, incs, acts] = await Promise.all([api("/api/v1/actions?status=pending_approval"), api("/api/v1/incidents?limit=100"), api("/api/v1/actions")]);
+    $("pending").innerHTML = pend.map(a => `<tr><td><code>${esc(a.id)}</code></td><td>${esc(a.type)}</td><td><code>${esc(a.incident_id)}</code></td><td><code>${esc(JSON.stringify(a.params))}</code></td><td class="muted">${esc(a.result?.detail)}</td>
+      <td><button class="primary" onclick="act('${esc(a.id)}','approve')">Approuver</button> <button onclick="act('${esc(a.id)}','reject')">Rejeter</button></td></tr>`).join("") || `<tr><td colspan="6" class="muted">Aucune</td></tr>`;
+    $("incidents").innerHTML = incs.map(i => `<tr><td><span class="badge ${esc(i.severity)}">${esc(i.severity)}</span>${i.artex_confirmed ? ' <span class="badge P1">ARTEX</span>' : ""}</td>
+      <td><code>${esc(i.source_ip || i.key)}</code><div class="muted">${esc((i.targets || []).join(", "))}</div></td><td>${esc(i.score)}</td><td>${esc(i.stage)}</td><td>${esc(i.status)}</td>
+      <td class="muted">${esc(Object.keys(i.indicators || {}).slice(0, 5).join(" ; "))}</td><td>${dt(i.last_seen)}</td>
+      <td><button onclick="setStatus('${esc(i.id)}','closed')">Clore</button> <button onclick="setStatus('${esc(i.id)}','false_positive')">Faux positif</button></td></tr>`).join("") || `<tr><td colspan="8" class="muted">Aucun incident</td></tr>`;
+    $("actions").innerHTML = acts.slice(0, 50).map(a => `<tr><td>${dt(a.executed || a.created)}</td><td>${esc(a.type)}</td><td>${esc(a.connector)}</td><td>${esc(a.status)}</td><td class="muted"><code>${esc(a.result?.detail)}${a.result?.commands?.length ? " : " + esc(a.result.commands.map(c => c.join(" ")).join(" | ")) : ""}</code></td></tr>`).join("");
+  } catch (e) { $("err").textContent = "Erreur : " + e.message; }
+}
+$("save").onclick = () => { try { sessionStorage.setItem("soar_key", $("key").value); sessionStorage.setItem("soar_user", $("user").value); } catch {} refresh(); };
+refresh(); setInterval(refresh, 10000);
+</script>
+</body>
+</html>

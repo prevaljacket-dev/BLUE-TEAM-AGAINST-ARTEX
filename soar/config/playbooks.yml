@@ -1,0 +1,36 @@
+# Playbooks de reponse (cf. playbook/PLAYBOOK.md). Chaque action ne se declenche qu'une fois
+# par incident. Conditions disponibles dans "when" :
+#   min_severity (P3|P2|P1), min_score, stages [recon, exploitation, credential_access, execution],
+#   artex_confirmed (true/false), kind (source|host), include_authorized, only_authorized.
+playbooks:
+  - name: pentest-autorise
+    when: {only_authorized: true, include_authorized: true}
+    actions:
+      - {type: notify, connector: log, params: {title: "Pentest autorise detecte"}}
+
+  - name: p3-reconnaissance
+    when: {min_severity: P3, min_score: 60}
+    actions:
+      - {type: notify, connector: log}
+      - {type: open_ticket, connector: ticket}
+
+  - name: p3-artex-confirme
+    when: {artex_confirmed: true}
+    actions:
+      - {type: block_ip, connector: nftables, params: {ttl: 86400}}
+      - {type: block_ip, connector: nginx_deny, params: {ttl: 86400}}
+
+  - name: p2-exploitation
+    when: {min_severity: P2}
+    actions:
+      - {type: open_ticket, connector: ticket}
+      - {type: block_ip, connector: nftables, params: {ttl: 604800}}
+      - {type: block_ip, connector: nginx_deny, params: {ttl: 604800}}
+      - {type: notify, connector: log, params: {title: "Exploitation en cours"}}
+
+  - name: p1-compromission
+    when: {min_severity: P1}
+    actions:
+      - {type: collect_evidence, connector: evidence}          # preuves AVANT toute modification
+      - {type: notify, connector: log, params: {title: "COMPROMISSION PROBABLE"}}
+      - {type: isolate_host, connector: isolation, require_approval: true}
