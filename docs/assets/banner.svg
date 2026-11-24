@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" role="img" aria-labelledby="t d">
+  <title id="t">ARTEX Blue Team</title>
+  <desc id="d">Kit défensif : détecter, corréler et répondre aux campagnes ARTEX</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1526"/>
+      <stop offset="1" stop-color="#10284a"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#1e3a5f" stroke-width="1" opacity="0.55"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="300" rx="18" fill="url(#bg)"/>
+  <rect width="1200" height="300" rx="18" fill="url(#grid)"/>
+  <!-- bouclier -->
+  <g transform="translate(110 55)">
+    <path d="M95 0 L190 32 V100 C190 160 150 200 95 220 C40 200 0 160 0 100 V32 Z" fill="url(#shield)"/>
+    <path d="M95 18 L172 44 V100 C172 150 140 184 95 201 C50 184 18 150 18 100 V44 Z" fill="none" stroke="#e0f2fe" stroke-width="3" opacity="0.6"/>
+    <!-- coche -->
+    <path d="M55 108 L84 138 L140 78" fill="none" stroke="#ffffff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <!-- textes -->
+  <text x="360" y="135" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="68" font-weight="700" fill="#f8fafc">ARTEX Blue Team</text>
+  <text x="362" y="185" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="28" fill="#7dd3fc">Détecter · Corréler · Répondre</text>
+  <text x="362" y="232" font-family="Consolas, Menlo, monospace" font-size="20" fill="#94a3b8">Suricata · Sigma · YARA · Sentinel · SOAR — 100 % défensif</text>
+</svg>
