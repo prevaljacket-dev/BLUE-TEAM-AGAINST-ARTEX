@@ -1,0 +1,55 @@
+id: 6a1e0c0d-a7e5-4b1e-9001-000000000005
+name: ARTEX - Sondes SQLi et XSS automatisees (sqlmap, dalfox, nuclei)
+description: |
+  Rafale de charges SQLi/XSS generees par les outils d'ARTEX. Seuil : 3 requetes suspectes par IP
+  sur l'heure (ajustable via la variable seuil).
+  Equivalent Sigma : rules/sigma/artex_sqli_xss_probes.yml.
+severity: Medium
+status: Available
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+query: |
+  let seuil = 3;
+  let sqli = @"(?i)union(\s|\+|/\*\*/)+(all(\s|\+)+)?select|sleep\(\s*\d+\s*\)|waitfor(\s|\+)+delay|(\s|\+)and(\s|\+)+1=1|extractvalue\(|updatexml\(|'(\s|\+)*or(\s|\+)*'?1'?(\s|\+)*=(\s|\+)*'?1";
+  let xss = @"(?i)<script|onerror(\s|\+)*=|onload(\s|\+)*=(\s|\+)*alert|javascript:alert|<svg";
+  ArtexWebRequests
+  | where isnotempty(UrlQuery)
+  | extend IsSqli = Target matches regex sqli, IsXss = Target matches regex xss
+  | where IsSqli or IsXss
+  | where SrcIp !in (ArtexAllowlist)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Probes = count(),
+      SqliProbes = countif(IsSqli), XssProbes = countif(IsXss), Http500 = countif(Status >= 500),
+      SampleUrls = make_set(Url, 10), Hosts = make_set(Host, 20), UserAgents = make_set(UserAgent, 5)
+      by SrcIp
+  | where Probes >= seuil
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIp
+customDetails:
+  Probes: Probes
+  SqliProbes: SqliProbes
+  XssProbes: XssProbes
+alertDetailsOverride:
+  alertDisplayNameFormat: "Sondes SQLi/XSS depuis {{SrcIp}} ({{Probes}} requetes)"
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: Selected
+    groupByEntities:
+      - IP
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+version: 1.0.0
+kind: Scheduled

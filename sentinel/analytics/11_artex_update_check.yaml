@@ -1,0 +1,45 @@
+id: 6a1e0c0d-a7e5-4b1e-9001-000000000011
+name: ARTEX - Verification de mise a jour d'une instance ARTEX interne
+description: |
+  Une instance ARTEX verifie ses mises a jour avec le User-Agent "artex-update-check". Vu dans les
+  logs du proxy ou du pare-feu sortant (CEF), il revele une instance ARTEX dans votre reseau.
+  Suricata : SID 9100002.
+severity: Medium
+status: Available
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - ResourceDevelopment
+relevantTechniques:
+  - T1588
+query: |
+  ArtexWebRequests
+  | where UserAgent =~ "artex-update-check"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Requests = count(),
+      Destinations = make_set(Host, 10), LogSources = make_set(LogSource, 5)
+      by SrcIp
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIp
+customDetails:
+  Requests: Requests
+alertDetailsOverride:
+  alertDisplayNameFormat: "Instance ARTEX interne probable : {{SrcIp}}"
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 7d
+    matchingMethod: Selected
+    groupByEntities:
+      - IP
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+version: 1.0.0
+kind: Scheduled

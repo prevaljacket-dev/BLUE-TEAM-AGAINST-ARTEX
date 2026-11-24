@@ -1,0 +1,19 @@
+// Titre : ARTEX - Service a l'ecoute sur 8787 (UI/API) ou 8788 (proxy MITM)
+// Tactique : ResourceDevelopment (T1588)
+// Ports par defaut d'une instance ARTEX. A croiser avec la regle "Instance ARTEX lancee sur un hote".
+union isfuzzy=true
+    (DeviceNetworkEvents
+    | where TimeGenerated > ago(7d)
+    | where (ActionType == "ListeningConnectionCreated" and LocalPort in (8787, 8788))
+        or (ActionType in ("ConnectionSuccess", "InboundConnectionAccepted") and RemotePort in (8787, 8788))
+    | project TimeGenerated, HostName = DeviceName, ActionType, LocalIP, LocalPort, RemoteIP, RemotePort,
+        Process = InitiatingProcessFileName, CommandLine = InitiatingProcessCommandLine),
+    (CommonSecurityLog
+    | where TimeGenerated > ago(7d)
+    | where DestinationPort in (8787, 8788)
+    | project TimeGenerated, HostName = DestinationHostName, ActionType = DeviceAction, LocalIP = DestinationIP,
+        LocalPort = DestinationPort, RemoteIP = SourceIP, RemotePort = SourcePort, Process = "", CommandLine = "")
+| summarize FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), Events = count(),
+    Peers = make_set(RemoteIP, 20), Processes = make_set(Process, 5)
+    by HostName, LocalIP, LocalPort
+| order by Events desc

@@ -1,0 +1,64 @@
+id: 6a1e0c0d-a7e5-4b1e-9001-000000000002
+name: ARTEX - User-Agents des outils embarques (sqlmap, ffuf, nmap NSE, hydra, nuclei, dalfox, headless)
+description: |
+  User-Agents par defaut des scanners livres dans l'image Docker d'ARTEX. Un seul n'est pas une preuve
+  d'ARTEX (ces outils sont courants), mais plusieurs outils depuis la meme IP en une heure est typique
+  de son orchestration. Ajouter vos scanners autorises dans la watchlist ArtexAllowlist.
+  Equivalent Sigma : rules/sigma/artex_toolchain_user_agents.yml. Suricata : SID 9100020-9100025.
+severity: Medium
+status: Available
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Reconnaissance
+  - InitialAccess
+  - CredentialAccess
+relevantTechniques:
+  - T1595
+  - T1190
+  - T1110
+query: |
+  ArtexWebRequests
+  | where SrcIp !in (ArtexAllowlist)
+  | extend Tool = case(
+      UserAgent contains "sqlmap/", "sqlmap",
+      UserAgent contains "Fuzz Faster U Fool", "ffuf",
+      UserAgent contains "Nmap Scripting Engine", "nmap NSE",
+      UserAgent contains "(Hydra)", "hydra",
+      UserAgent contains "nuclei", "nuclei",
+      UserAgent contains "dalfox", "dalfox",
+      UserAgent contains "HeadlessChrome", "Chromium headless (Playwright)",
+      "")
+  | where isnotempty(Tool)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Requests = count(),
+      Tools = make_set(Tool), UserAgents = make_set(UserAgent, 10), Hosts = make_set(Host, 20)
+      by SrcIp
+  | extend ToolCount = array_length(Tools)
+  | order by ToolCount desc, Requests desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIp
+customDetails:
+  Tools: Tools
+  ToolCount: ToolCount
+  Requests: Requests
+alertDetailsOverride:
+  alertDisplayNameFormat: "Outils ARTEX ({{ToolCount}}) depuis {{SrcIp}}"
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: Selected
+    groupByEntities:
+      - IP
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+version: 1.0.0
+kind: Scheduled

@@ -1,0 +1,49 @@
+id: 6a1e0c0d-a7e5-4b1e-9001-000000000001
+name: ARTEX - User-Agent d'evaluation ARTEX-Assessment
+description: |
+  Requete HTTP portant l'identifiant optionnel ARTEX-Assessment/1.0 (engagement=...), ajoute par ARTEX
+  quand l'identification d'evaluation est activee. Verifier la reference engagement= aupres de l'equipe
+  offensive : si le test n'est pas annonce, traiter comme une attaque.
+  Equivalent Sigma : rules/sigma/artex_assessment_user_agent.yml. Suricata : SID 9100001.
+severity: High
+status: Available
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Reconnaissance
+relevantTechniques:
+  - T1595
+query: |
+  ArtexWebRequests
+  | where UserAgent startswith "ARTEX-Assessment/"
+  | where SrcIp !in (ArtexAllowlist)
+  | extend Engagement = extract(@"engagement=([^)\s;]+)", 1, UserAgent)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Requests = count(),
+      Hosts = make_set(Host, 20), SampleUrls = make_set(Url, 10), LogSources = make_set(LogSource, 5)
+      by SrcIp, UserAgent, Engagement
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIp
+customDetails:
+  Engagement: Engagement
+  Requests: Requests
+alertDetailsOverride:
+  alertDisplayNameFormat: "ARTEX-Assessment depuis {{SrcIp}} (engagement={{Engagement}})"
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: Selected
+    groupByEntities:
+      - IP
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+version: 1.0.0
+kind: Scheduled

@@ -1,0 +1,920 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "description": "Kit ARTEX Blue Team pour Microsoft Sentinel. Fichier genere par sentinel/build_arm.py : ne pas modifier a la main."
+  },
+  "parameters": {
+    "workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "Nom de l'espace de travail Log Analytics ou Microsoft Sentinel est active."
+      }
+    },
+    "enableRules": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Activer les regles d'analyse des leur creation."
+      }
+    },
+    "createIncidents": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Creer un incident pour chaque alerte (sinon : alertes seules)."
+      }
+    },
+    "deployWorkbook": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deployer le classeur 'ARTEX - Vue d'ensemble'."
+      }
+    }
+  },
+  "variables": {
+    "fnWeb": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'ArtexWebRequests')]",
+    "fnAllow": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'ArtexAllowlist')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2020-08-01",
+      "name": "[concat(parameters('workspace'), '/ArtexAllowlist')]",
+      "properties": {
+        "category": "ARTEX Blue Team",
+        "displayName": "ArtexAllowlist",
+        "functionAlias": "ArtexAllowlist",
+        "query": "// ArtexAllowlist : IP sources autorisees (pentests annonces, scanners internes).\n// Lit la watchlist \"ArtexAllowlist\" (colonne SrcIp). Si la watchlist n'existe pas encore,\n// la fonction renvoie une liste vide au lieu d'echouer.\nunion isfuzzy=true\n    (datatable(SrcIp:string)[]),\n    (_GetWatchlist(\"ArtexAllowlist\") | project SrcIp = tostring(SearchKey))\n| where isnotempty(SrcIp)\n| distinct SrcIp\n",
+        "version": 2
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2020-08-01",
+      "name": "[concat(parameters('workspace'), '/ArtexWebRequests')]",
+      "properties": {
+        "category": "ARTEX Blue Team",
+        "displayName": "ArtexWebRequests",
+        "functionAlias": "ArtexWebRequests",
+        "query": "// ArtexWebRequests : vue unifiee des requetes HTTP, quelle que soit la source de logs.\n// Utilisee par toutes les regles ARTEX. A enregistrer comme fonction (alias ArtexWebRequests).\n// Chaque source absente de votre espace de travail est ignoree (union isfuzzy=true).\n// Pour ajouter une source (table personnalisee nginx_CL, etc.), ajoutez une branche qui produit\n// les memes colonnes que la datatable ci-dessous.\nunion isfuzzy=true\n    // Schema de reference : garantit que la fonction marche meme sans aucune source.\n    (datatable(TimeGenerated:datetime, SrcIp:string, Method:string, Host:string, UrlPath:string,\n               UrlQuery:string, UserAgent:string, Status:int, Computer:string, LogSource:string)[]),\n    // IIS (agent AMA / MMA)\n    (W3CIISLog\n    | project TimeGenerated,\n        SrcIp = cIP,\n        Method = csMethod,\n        Host = tostring(column_ifexists(\"csHost\", \"\")),\n        UrlPath = csUriStem,\n        UrlQuery = iff(csUriQuery == \"-\", \"\", csUriQuery),\n        UserAgent = replace_string(csUserAgent, \"+\", \" \"),\n        Status = toint(scStatus),\n        Computer,\n        LogSource = \"IIS\"),\n    // Application Gateway / WAF v2 (mode AzureDiagnostics)\n    (AzureDiagnostics\n    | where Category == \"ApplicationGatewayAccessLog\"\n    | extend _uri = tostring(column_ifexists(\"requestUri_s\", \"\"))\n    | project TimeGenerated,\n        SrcIp = tostring(column_ifexists(\"clientIP_s\", \"\")),\n        Method = tostring(column_ifexists(\"httpMethod_s\", \"\")),\n        Host = tostring(column_ifexists(\"host_s\", \"\")),\n        UrlPath = tostring(split(_uri, \"?\")[0]),\n        UrlQuery = extract(@\"\\?(.*)$\", 1, _uri),\n        UserAgent = tostring(column_ifexists(\"userAgent_s\", \"\")),\n        Status = toint(column_ifexists(\"httpStatus_d\", real(null))),\n        Computer = Resource,\n        LogSource = \"AppGateway\"),\n    // Application Gateway (tables specifiques a la ressource)\n    (AGWAccessLogs\n    | project TimeGenerated,\n        SrcIp = ClientIp,\n        Method = HttpMethod,\n        Host,\n        UrlPath = tostring(split(RequestUri, \"?\")[0]),\n        UrlQuery = coalesce(RequestQuery, extract(@\"\\?(.*)$\", 1, RequestUri)),\n        UserAgent,\n        Status = toint(HttpStatus),\n        Computer = _ResourceId,\n        LogSource = \"AppGateway\"),\n    // Azure Front Door (classique / Standard / Premium, mode AzureDiagnostics)\n    (AzureDiagnostics\n    | where Category in (\"FrontDoorAccessLog\", \"FrontdoorAccessLog\")\n    | extend _uri = tostring(column_ifexists(\"requestUri_s\", \"\"))\n    | project TimeGenerated,\n        SrcIp = tostring(column_ifexists(\"clientIp_s\", \"\")),\n        Method = tostring(column_ifexists(\"httpMethod_s\", \"\")),\n        Host = extract(@\"^https?://([^/:]+)\", 1, _uri),\n        UrlPath = extract(@\"^(?:https?://[^/]+)?([^?]*)\", 1, _uri),\n        UrlQuery = extract(@\"\\?(.*)$\", 1, _uri),\n        UserAgent = tostring(column_ifexists(\"userAgent_s\", \"\")),\n        Status = toint(column_ifexists(\"httpStatusCode_s\", \"\")),\n        Computer = Resource,\n        LogSource = \"FrontDoor\"),\n    // Pare-feu / WAF / proxy tiers en CEF (Fortinet, Palo Alto, F5, Imperva, Barracuda, Zscaler...)\n    (CommonSecurityLog\n    | where isnotempty(RequestURL)\n    | project TimeGenerated,\n        SrcIp = SourceIP,\n        Method = RequestMethod,\n        Host = coalesce(DestinationHostName, extract(@\"^https?://([^/:]+)\", 1, RequestURL)),\n        UrlPath = extract(@\"^(?:https?://[^/]+)?([^?]*)\", 1, RequestURL),\n        UrlQuery = extract(@\"\\?(.*)$\", 1, RequestURL),\n        UserAgent = RequestClientApplication,\n        Status = toint(extract(@\"(?i)(?:^|;)\\s*(?:status|httpStatus|responseCode)=(\\d{3})\", 1, AdditionalExtensions)),\n        Computer,\n        LogSource = strcat(\"CEF:\", DeviceVendor, \" \", DeviceProduct)),\n    // Nginx / Apache envoyes en Syslog (format \"combined\")\n    (Syslog\n    | where ProcessName in~ (\"nginx\", \"httpd\", \"apache\", \"apache2\", \"apache-access\", \"nginx-access\")\n    | extend _m = extract_all(@\"^(\\S+) \\S+ \\S+ \\[[^\\]]+\\] \"\"(\\S+) (\\S+)[^\"\"]*\"\" (\\d{3}) \\S+ \"\"[^\"\"]*\"\" \"\"([^\"\"]*)\"\"\", SyslogMessage)\n    | where array_length(_m) > 0\n    | extend _uri = tostring(_m[0][2])\n    | project TimeGenerated,\n        SrcIp = tostring(_m[0][0]),\n        Method = tostring(_m[0][1]),\n        Host = HostName,\n        UrlPath = tostring(split(_uri, \"?\")[0]),\n        UrlQuery = extract(@\"\\?(.*)$\", 1, _uri),\n        UserAgent = tostring(_m[0][4]),\n        Status = toint(_m[0][3]),\n        Computer,\n        LogSource = \"Syslog\")\n| extend Url = iff(isempty(UrlQuery), UrlPath, strcat(UrlPath, \"?\", UrlQuery))\n// Target = URL brute + URL decodee : les regles cherchent les charges dans les deux formes\n| extend Target = strcat(Url, \" \", url_decode(Url))\n",
+        "version": 2
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "apiVersion": "2023-02-01",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', '6a1e0c0d-a7e5-4b1e-9001-000000000001')]",
+      "kind": "Scheduled",
+      "dependsOn": [
+        "[variables('fnWeb')]",
+        "[variables('fnAllow')]"
+      ],
+      "properties": {
+        "displayName": "ARTEX - User-Agent d'evaluation ARTEX-Assessment",
+        "description": "Requete HTTP portant l'identifiant optionnel ARTEX-Assessment/1.0 (engagement=...), ajoute par ARTEX\nquand l'identification d'evaluation est activee. Verifier la reference engagement= aupres de l'equipe\noffensive : si le test n'est pas annonce, traiter comme une attaque.\nEquivalent Sigma : rules/sigma/artex_assessment_user_agent.yml. Suricata : SID 9100001.",
+        "severity": "High",
+        "enabled": "[parameters('enableRules')]",
+        "query": "ArtexWebRequests\n| where UserAgent startswith \"ARTEX-Assessment/\"\n| where SrcIp !in (ArtexAllowlist)\n| extend Engagement = extract(@\"engagement=([^)\\s;]+)\", 1, UserAgent)\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Requests = count(),\n    Hosts = make_set(Host, 20), SampleUrls = make_set(Url, 10), LogSources = make_set(LogSource, 5)\n    by SrcIp, UserAgent, Engagement\n",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Reconnaissance"
+        ],
+        "techniques": [
+          "T1595"
+        ],
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SrcIp"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "customDetails": {
+          "Engagement": "Engagement",
+          "Requests": "Requests"
+        },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "ARTEX-Assessment depuis {{SrcIp}} (engagement={{Engagement}})"
+        },
+        "incidentConfiguration": {
+          "createIncident": "[parameters('createIncidents')]",
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "P1D",
+            "matchingMethod": "Selected",
+            "groupByEntities": [
+              "IP"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "apiVersion": "2023-02-01",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', '6a1e0c0d-a7e5-4b1e-9001-000000000002')]",
+      "kind": "Scheduled",
+      "dependsOn": [
+        "[variables('fnWeb')]",
+        "[variables('fnAllow')]"
+      ],
+      "properties": {
+        "displayName": "ARTEX - User-Agents des outils embarques (sqlmap, ffuf, nmap NSE, hydra, nuclei, dalfox, headless)",
+        "description": "User-Agents par defaut des scanners livres dans l'image Docker d'ARTEX. Un seul n'est pas une preuve\nd'ARTEX (ces outils sont courants), mais plusieurs outils depuis la meme IP en une heure est typique\nde son orchestration. Ajouter vos scanners autorises dans la watchlist ArtexAllowlist.\nEquivalent Sigma : rules/sigma/artex_toolchain_user_agents.yml. Suricata : SID 9100020-9100025.",
+        "severity": "Medium",
+        "enabled": "[parameters('enableRules')]",
+        "query": "ArtexWebRequests\n| where SrcIp !in (ArtexAllowlist)\n| extend Tool = case(\n    UserAgent contains \"sqlmap/\", \"sqlmap\",\n    UserAgent contains \"Fuzz Faster U Fool\", \"ffuf\",\n    UserAgent contains \"Nmap Scripting Engine\", \"nmap NSE\",\n    UserAgent contains \"(Hydra)\", \"hydra\",\n    UserAgent contains \"nuclei\", \"nuclei\",\n    UserAgent contains \"dalfox\", \"dalfox\",\n    UserAgent contains \"HeadlessChrome\", \"Chromium headless (Playwright)\",\n    \"\")\n| where isnotempty(Tool)\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Requests = count(),\n    Tools = make_set(Tool), UserAgents = make_set(UserAgent, 10), Hosts = make_set(Host, 20)\n    by SrcIp\n| extend ToolCount = array_length(Tools)\n| order by ToolCount desc, Requests desc\n",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Reconnaissance",
+          "InitialAccess",
+          "CredentialAccess"
+        ],
+        "techniques": [
+          "T1595",
+          "T1190",
+          "T1110"
+        ],
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SrcIp"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "customDetails": {
+          "Tools": "Tools",
+          "ToolCount": "ToolCount",
+          "Requests": "Requests"
+        },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Outils ARTEX ({{ToolCount}}) depuis {{SrcIp}}"
+        },
+        "incidentConfiguration": {
+          "createIncident": "[parameters('createIncidents')]",
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "P1D",
+            "matchingMethod": "Selected",
+            "groupByEntities": [
+              "IP"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "apiVersion": "2023-02-01",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', '6a1e0c0d-a7e5-4b1e-9001-000000000003')]",
+      "kind": "Scheduled",
+      "dependsOn": [
+        "[variables('fnWeb')]",
+        "[variables('fnAllow')]"
+      ],
+      "properties": {
+        "displayName": "ARTEX - Tentative de LFI ou de traversee de repertoire",
+        "description": "Charges LFI classiques testees par les workers ARTEX (nuclei, ffuf, tests du planner) avant la chaine\nphp2shell. Un code HTTP 200 sur ces requetes merite une verification immediate du serveur.\nEquivalent Sigma : rules/sigma/artex_lfi_traversal.yml. Suricata : SID 9100050.",
+        "severity": "High",
+        "enabled": "[parameters('enableRules')]",
+        "query": "ArtexWebRequests\n| where Target matches regex @\"(?i)(\\.\\./){3,}|(%2e%2e(%2f|/)){3,}|(\\.\\.%2f){2,}|/etc/passwd|php://(filter|input)|data://text/plain|expect://\"\n| where SrcIp !in (ArtexAllowlist)\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Attempts = count(),\n    Http200 = countif(Status == 200), SampleUrls = make_set(Url, 10), Hosts = make_set(Host, 20),\n    UserAgents = make_set(UserAgent, 5)\n    by SrcIp\n",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "InitialAccess"
+        ],
+        "techniques": [
+          "T1190"
+        ],
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SrcIp"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "customDetails": {
+          "Attempts": "Attempts",
+          "Http200": "Http200"
+        },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "LFI depuis {{SrcIp}} ({{Attempts}} tentatives, {{Http200}} en 200)"
+        },
+        "incidentConfiguration": {
+          "createIncident": "[parameters('createIncidents')]",
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "P1D",
+            "matchingMethod": "Selected",
+            "groupByEntities": [
+              "IP"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "apiVersion": "2023-02-01",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', '6a1e0c0d-a7e5-4b1e-9001-000000000004')]",
+      "kind": "Scheduled",
+      "dependsOn": [
+        "[variables('fnWeb')]",
+        "[variables('fnAllow')]"
+      ],
+      "properties": {
+        "displayName": "ARTEX php2shell - Inclusion d'un fichier de session PHP via LFI",
+        "description": "Etape finale de la chaine php2shell d'ARTEX : un parametre d'inclusion pointe vers un fichier sess_*\nrempli au prealable via PHP_SESSION_UPLOAD_PROGRESS, ce qui execute du code sur le serveur.\nUn code HTTP 200 indique une compromission probable (P1 du playbook) : isoler et collecter les preuves.\nEquivalent Sigma : rules/sigma/artex_php2shell_session_lfi.yml. Suricata : SID 9100040-9100042.",
+        "severity": "High",
+        "enabled": "[parameters('enableRules')]",
+        "query": "ArtexWebRequests\n| where Target contains \"sess_\"\n| where Target matches regex @\"(?i)sess_[a-z0-9,-]{6,}\"\n| where Target matches regex @\"(?i)(\\.\\./|%2e%2e|/tmp/|/var/lib/php)\"\n| where SrcIp !in (ArtexAllowlist)\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Attempts = count(),\n    Http200 = countif(Status == 200), Statuses = make_set(Status), SampleUrls = make_set(Url, 10)\n    by SrcIp, Host, Computer\n| extend Verdict = iff(Http200 > 0, \"Compromission probable (HTTP 200)\", \"Tentative\")\n",
+        "queryFrequency": "PT15M",
+        "queryPeriod": "PT15M",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "InitialAccess",
+          "Execution"
+        ],
+        "techniques": [
+          "T1190",
+          "T1059"
+        ],
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SrcIp"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "Computer"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "customDetails": {
+          "Verdict": "Verdict",
+          "Attempts": "Attempts",
+          "Http200": "Http200"
+        },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "php2shell sur {{Host}} depuis {{SrcIp}} : {{Verdict}}"
+        },
+        "incidentConfiguration": {
+          "createIncident": "[parameters('createIncidents')]",
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": true,
+            "lookbackDuration": "P1D",
+            "matchingMethod": "Selected",
+            "groupByEntities": [
+              "IP",
+              "Host"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "apiVersion": "2023-02-01",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', '6a1e0c0d-a7e5-4b1e-9001-000000000005')]",
+      "kind": "Scheduled",
+      "dependsOn": [
+        "[variables('fnWeb')]",
+        "[variables('fnAllow')]"
+      ],
+      "properties": {
+        "displayName": "ARTEX - Sondes SQLi et XSS automatisees (sqlmap, dalfox, nuclei)",
+        "description": "Rafale de charges SQLi/XSS generees par les outils d'ARTEX. Seuil : 3 requetes suspectes par IP\nsur l'heure (ajustable via la variable seuil).\nEquivalent Sigma : rules/sigma/artex_sqli_xss_probes.yml.",
+        "severity": "Medium",
+        "enabled": "[parameters('enableRules')]",
+        "query": "let seuil = 3;\nlet sqli = @\"(?i)union(\\s|\\+|/\\*\\*/)+(all(\\s|\\+)+)?select|sleep\\(\\s*\\d+\\s*\\)|waitfor(\\s|\\+)+delay|(\\s|\\+)and(\\s|\\+)+1=1|extractvalue\\(|updatexml\\(|'(\\s|\\+)*or(\\s|\\+)*'?1'?(\\s|\\+)*=(\\s|\\+)*'?1\";\nlet xss = @\"(?i)<script|onerror(\\s|\\+)*=|onload(\\s|\\+)*=(\\s|\\+)*alert|javascript:alert|<svg\";\nArtexWebRequests\n| where isnotempty(UrlQuery)\n| extend IsSqli = Target matches regex sqli, IsXss = Target matches regex xss\n| where IsSqli or IsXss\n| where SrcIp !in (ArtexAllowlist)\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Probes = count(),\n    SqliProbes = countif(IsSqli), XssProbes = countif(IsXss), Http500 = countif(Status >= 500),\n    SampleUrls = make_set(Url, 10), Hosts = make_set(Host, 20), UserAgents = make_set(UserAgent, 5)\n    by SrcIp\n| where Probes >= seuil\n",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "InitialAccess"
+        ],
+        "techniques": [
+          "T1190"
+        ],
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SrcIp"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "customDetails": {
+          "Probes": "Probes",
+          "SqliProbes": "SqliProbes",
+          "XssProbes": "XssProbes"
+        },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Sondes SQLi/XSS depuis {{SrcIp}} ({{Probes}} requetes)"
+        },
+        "incidentConfiguration": {
+          "createIncident": "[parameters('createIncidents')]",
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "P1D",
+            "matchingMethod": "Selected",
+            "groupByEntities": [
+              "IP"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "apiVersion": "2023-02-01",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', '6a1e0c0d-a7e5-4b1e-9001-000000000006')]",
+      "kind": "Scheduled",
+      "dependsOn": [
+        "[variables('fnWeb')]",
+        "[variables('fnAllow')]"
+      ],
+      "properties": {
+        "displayName": "ARTEX - Rafale de requetes ou enumeration massive (ffuf, katana, nuclei)",
+        "description": "ARTEX tourne par defaut sans limitation de debit (profil de bruit \"off\") : rafales de requetes et\ncentaines de 404 en quelques minutes pendant l'enumeration. Detecte, par tranche de 5 minutes, une IP\nqui depasse 500 requetes, ou 100 reponses 404 sur au moins 100 chemins differents.\nLe profil \"quiet\" (~2 req/s) est couvert par la requete de chasse artex_slow_scan.kql.\nSuricata : SID 9100060.",
+        "severity": "Medium",
+        "enabled": "[parameters('enableRules')]",
+        "query": "let seuilRequetes = 500;\nlet seuil404 = 100;\nArtexWebRequests\n| where SrcIp !in (ArtexAllowlist)\n| summarize Requests = count(), NotFound = countif(Status == 404), DistinctPaths = dcount(UrlPath),\n    UserAgents = make_set(UserAgent, 5), Hosts = make_set(Host, 10)\n    by SrcIp, Window = bin(TimeGenerated, 5m)\n| where Requests >= seuilRequetes or (NotFound >= seuil404 and DistinctPaths >= seuil404)\n| summarize StartTime = min(Window), EndTime = max(Window) + 5m, PeakRequestsPer5m = max(Requests),\n    Total404 = sum(NotFound), MaxDistinctPaths = max(DistinctPaths),\n    SampleUserAgents = take_any(UserAgents), SampleHosts = take_any(Hosts)\n    by SrcIp\n",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Reconnaissance"
+        ],
+        "techniques": [
+          "T1595"
+        ],
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SrcIp"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "customDetails": {
+          "PeakRequestsPer5m": "PeakRequestsPer5m",
+          "Total404": "Total404"
+        },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Rafale/enumeration depuis {{SrcIp}} ({{PeakRequestsPer5m}} req/5 min)"
+        },
+        "incidentConfiguration": {
+          "createIncident": "[parameters('createIncidents')]",
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "P1D",
+            "matchingMethod": "Selected",
+            "groupByEntities": [
+              "IP"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "apiVersion": "2023-02-01",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', '6a1e0c0d-a7e5-4b1e-9001-000000000007')]",
+      "kind": "Scheduled",
+      "dependsOn": [
+        "[variables('fnWeb')]",
+        "[variables('fnAllow')]"
+      ],
+      "properties": {
+        "displayName": "ARTEX - Score d'attaque par IP (equivalent de artex_triage.py)",
+        "description": "Reprend le score de tools/artex_triage.py : chaque signature (UA d'outil, charge LFI/SQLi/XSS,\nphp2shell, OAST, injection de commande) compte une fois par IP avec son poids, plus des bonus\ncomportementaux (rafale, 404 massifs, rotation de User-Agents). Alerte a partir de 100 (CRITIQUE),\nce qui correspond a une chaine reconnaissance + exploitation typique d'ARTEX.\nFenetre : 6 heures, evaluee toutes les heures.",
+        "severity": "High",
+        "enabled": "[parameters('enableRules')]",
+        "query": "let seuilScore = 100;\nlet web = ArtexWebRequests\n  | where isnotempty(SrcIp)\n  | where SrcIp !in (ArtexAllowlist);\n// Chaque signature vaut 1 si l'IP l'a touchee au moins une fois (poids compte une seule fois)\nlet hits = web\n  | extend\n      ua_artex = UserAgent matches regex @\"(?i)^ARTEX-Assessment/\",\n      ua_sqlmap = UserAgent matches regex @\"(?i)sqlmap/\",\n      ua_ffuf = UserAgent matches regex @\"(?i)Fuzz Faster U Fool\",\n      ua_nmap = UserAgent matches regex @\"(?i)Nmap Scripting Engine\",\n      ua_hydra = UserAgent matches regex @\"(?i)\\(Hydra\\)\",\n      ua_headless = UserAgent matches regex @\"(?i)HeadlessChrome\",\n      ua_nuclei = UserAgent matches regex @\"(?i)nuclei\",\n      ua_dalfox = UserAgent matches regex @\"(?i)dalfox\",\n      ua_pd = UserAgent matches regex @\"(?i)katana|httpx|projectdiscovery\",\n      ua_bbot = UserAgent matches regex @\"(?i)bbot\",\n      ua_script = UserAgent matches regex @\"(?i)python-requests|python-urllib|aiohttp|Go-http-client|curl/|Wget/\",\n      p_sess = Target matches regex @\"(?i)sess_[a-z0-9,-]{6,}\",\n      p_upload = Target matches regex @\"(?i)PHP_SESSION_UPLOAD_PROGRESS\",\n      p_lfi = Target matches regex @\"(?i)(\\.\\./){3,}|/etc/passwd|php://(filter|input)|data://text/plain|expect://\",\n      p_sqli = Target matches regex @\"(?i)union(\\s|\\+)+all(\\s|\\+)+select|sleep\\(\\d+\\)|waitfor(\\s|\\+)+delay|extractvalue\\(|updatexml\\(|'(\\s|\\+)*or(\\s|\\+)*'?1'?(\\s|\\+)*=(\\s|\\+)*'?1\",\n      p_xss = Target matches regex @\"(?i)<script|onerror\\s*=|onload\\s*=|javascript:alert|<svg\",\n      p_oast = Target matches regex @\"(?i)\\.oast\\.(pro|live|site|online|fun|me)|interact\\.sh\",\n      p_tpl = Target matches regex @\"(?i)\\$\\{jndi:|\\{\\{\\d+\\*\\d+\\}\\}|\\$\\{\\d+\\*\\d+\\}\",\n      p_cmd = Target matches regex @\"(?i);\\s*(id|whoami|uname)\\b|\\|\\s*(id|whoami)\\b|`id`|\\$\\(id\\)\"\n  | summarize\n      ua_artex = max(toint(ua_artex)), ua_sqlmap = max(toint(ua_sqlmap)), ua_ffuf = max(toint(ua_ffuf)),\n      ua_nmap = max(toint(ua_nmap)), ua_hydra = max(toint(ua_hydra)), ua_headless = max(toint(ua_headless)),\n      ua_nuclei = max(toint(ua_nuclei)), ua_dalfox = max(toint(ua_dalfox)), ua_pd = max(toint(ua_pd)),\n      ua_bbot = max(toint(ua_bbot)), ua_script = max(toint(ua_script)),\n      p_sess = max(toint(p_sess)), p_upload = max(toint(p_upload)), p_lfi = max(toint(p_lfi)),\n      p_sqli = max(toint(p_sqli)), p_xss = max(toint(p_xss)), p_oast = max(toint(p_oast)),\n      p_tpl = max(toint(p_tpl)), p_cmd = max(toint(p_cmd)),\n      Requests = count(), Errors4xx = countif(Status between (400 .. 499)),\n      DistinctPaths = dcount(UrlPath), DistinctUA = dcount(UserAgent),\n      StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Hosts = make_set(Host, 20)\n      by SrcIp;\nlet peaks = web\n  | summarize c = count() by SrcIp, bin(TimeGenerated, 5m)\n  | summarize PeakRequestsPer5m = max(c) by SrcIp;\nhits\n| join kind=leftouter peaks on SrcIp\n| extend SignatureScore =\n      100 * ua_artex + 60 * ua_sqlmap + 50 * ua_ffuf + 40 * ua_nmap + 60 * ua_hydra + 20 * ua_headless\n    + 50 * ua_nuclei + 50 * ua_dalfox + 40 * ua_pd + 40 * ua_bbot + 10 * ua_script\n    + 80 * p_sess + 60 * p_upload + 40 * p_lfi + 40 * p_sqli + 20 * p_xss + 50 * p_oast\n    + 30 * p_tpl + 40 * p_cmd\n| extend BonusBurst = iff(PeakRequestsPer5m >= 500, 30, 0),\n    BonusEnum = iff(DistinctPaths >= 200 and todouble(Errors4xx) / Requests > 0.6, 30, 0),\n    BonusUA = iff(DistinctUA >= 5, 20, 0)\n| extend Score = SignatureScore + BonusBurst + BonusEnum + BonusUA\n| where Score >= seuilScore\n| extend Signatures = bag_pack(\n      \"ARTEX-Assessment\", ua_artex, \"sqlmap\", ua_sqlmap, \"ffuf\", ua_ffuf, \"nmap\", ua_nmap,\n      \"hydra\", ua_hydra, \"headless\", ua_headless, \"nuclei\", ua_nuclei, \"dalfox\", ua_dalfox,\n      \"projectdiscovery\", ua_pd, \"bbot\", ua_bbot, \"script\", ua_script,\n      \"php2shell_sess\", p_sess, \"upload_progress\", p_upload, \"lfi\", p_lfi, \"sqli\", p_sqli,\n      \"xss\", p_xss, \"oast\", p_oast, \"template_jndi\", p_tpl, \"cmd_injection\", p_cmd,\n      \"rafale\", BonusBurst / 30, \"enumeration\", BonusEnum / 30, \"rotation_ua\", BonusUA / 20)\n| mv-apply s = Signatures on (where toint(s[tostring(bag_keys(s)[0])]) == 1\n    | summarize SignatureList = make_list(tostring(bag_keys(s)[0])))\n| extend Level = case(Score >= 100, \"CRITIQUE\", Score >= 60, \"ELEVE\", Score >= 30, \"MOYEN\", \"FAIBLE\")\n| project SrcIp, Score, Level, Signatures = strcat_array(SignatureList, \", \"), Requests, Errors4xx,\n    DistinctPaths, DistinctUA, PeakRequestsPer5m, StartTime, EndTime, Hosts\n| order by Score desc\n",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT6H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Reconnaissance",
+          "InitialAccess",
+          "CredentialAccess",
+          "Execution"
+        ],
+        "techniques": [
+          "T1595",
+          "T1190",
+          "T1110",
+          "T1059"
+        ],
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SrcIp"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "customDetails": {
+          "Score": "Score",
+          "Level": "Level",
+          "Signatures": "Signatures"
+        },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Chaine d'attaque type ARTEX depuis {{SrcIp}} (score {{Score}})",
+          "alertDescriptionFormat": "Signatures : {{Signatures}}. Voir le playbook ARTEX, section 2 (qualification)."
+        },
+        "incidentConfiguration": {
+          "createIncident": "[parameters('createIncidents')]",
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "P1D",
+            "matchingMethod": "Selected",
+            "groupByEntities": [
+              "IP"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "apiVersion": "2023-02-01",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', '6a1e0c0d-a7e5-4b1e-9001-000000000008')]",
+      "kind": "Scheduled",
+      "dependsOn": [
+        "[variables('fnWeb')]",
+        "[variables('fnAllow')]"
+      ],
+      "properties": {
+        "displayName": "ARTEX - Instance ARTEX lancee sur un hote interne",
+        "description": "Demarrage du serveur ARTEX ou de son conteneur (binaire artex, image ghcr.io/baarai/artex,\nvariables ARTEX_*). Legitime seulement pour l'equipe offensive autorisee ; sinon quelqu'un heberge\nune plateforme de pentest autonome chez vous (playbook, section 4).\nSources : Defender for Endpoint (DeviceProcessEvents), evenements Windows 4688 (SecurityEvent),\nSyslog/auditd. Equivalent Sigma : rules/sigma/artex_instance_on_host.yml.",
+        "severity": "High",
+        "enabled": "[parameters('enableRules')]",
+        "query": "let marqueurs = @\"(?i)ghcr\\.io/baarai/artex|baarai/artex|ARTEX_NOISE_PROFILE|ARTEX_PG_HOST|ARTEX_BIND_ADDR\";\nunion isfuzzy=true\n  (datatable(TimeGenerated:datetime, HostName:string, AccountName:string, Image:string, CommandLine:string, LogSource:string)[]),\n  (DeviceProcessEvents\n  | where FolderPath contains \"artex\" or ProcessCommandLine contains \"artex\"\n  | where FolderPath endswith \"/artex\" or ProcessCommandLine matches regex marqueurs\n  | project TimeGenerated, HostName = DeviceName, AccountName, Image = FolderPath,\n      CommandLine = ProcessCommandLine, LogSource = \"MDE\"),\n  (SecurityEvent\n  | where EventID == 4688\n  | where NewProcessName contains \"artex\" or CommandLine contains \"artex\"\n  | where NewProcessName endswith @\"\\artex.exe\" or CommandLine matches regex marqueurs\n  | project TimeGenerated, HostName = Computer, AccountName = SubjectUserName, Image = NewProcessName,\n      CommandLine, LogSource = \"SecurityEvent 4688\"),\n  (Syslog\n  | where SyslogMessage contains \"artex\"\n  | where SyslogMessage matches regex marqueurs or SyslogMessage matches regex @\"exe=\"\"?[^ \"\"]*/artex\"\"?(\\s|$)\"\n  | project TimeGenerated, HostName = Computer, AccountName = \"\", Image = ProcessName,\n      CommandLine = SyslogMessage, LogSource = \"Syslog\")\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Events = count(),\n    CommandLines = make_set(CommandLine, 10), Accounts = make_set(AccountName, 10)\n    by HostName, LogSource\n",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "ResourceDevelopment"
+        ],
+        "techniques": [
+          "T1588"
+        ],
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "HostName"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "customDetails": {
+          "Events": "Events"
+        },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Instance ARTEX detectee sur {{HostName}}"
+        },
+        "incidentConfiguration": {
+          "createIncident": "[parameters('createIncidents')]",
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "P1D",
+            "matchingMethod": "Selected",
+            "groupByEntities": [
+              "Host"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "apiVersion": "2023-02-01",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', '6a1e0c0d-a7e5-4b1e-9001-000000000009')]",
+      "kind": "Scheduled",
+      "dependsOn": [
+        "[variables('fnWeb')]",
+        "[variables('fnAllow')]"
+      ],
+      "properties": {
+        "displayName": "ARTEX - Callback OAST (interactsh) depuis un serveur interne",
+        "description": "nuclei, utilise par ARTEX, confirme les vulnerabilites aveugles (SSRF, RCE, XXE, Log4Shell) en\nfaisant contacter par la cible un domaine *.oast.* ou *.interact.sh. Une resolution de ces domaines\npar un de vos serveurs signifie qu'une charge a ete executee ou interpretee : vulnerabilite confirmee.\nSources : DnsEvents (DNS Windows), DeviceNetworkEvents (Defender), ASimDnsActivityLogs.\nSuricata : SID 9100030-9100031.",
+        "severity": "High",
+        "enabled": "[parameters('enableRules')]",
+        "query": "let oast = @\"(?i)(^|\\.)(oast\\.(pro|live|site|online|fun|me)|interact\\.sh)\\.?$\";\nunion isfuzzy=true\n  (datatable(TimeGenerated:datetime, ClientIp:string, HostName:string, Domain:string, LogSource:string)[]),\n  (DnsEvents\n  | where Name contains \"oast.\" or Name contains \"interact.sh\"\n  | where Name matches regex oast\n  | project TimeGenerated, ClientIp = ClientIP, HostName = Computer, Domain = Name, LogSource = \"DnsEvents\"),\n  (DeviceNetworkEvents\n  | where RemoteUrl contains \"oast.\" or RemoteUrl contains \"interact.sh\"\n  | extend Domain = tostring(split(trim_end(\"/\", tostring(split(replace_regex(RemoteUrl, @\"^[a-z]+://\", \"\"), \"/\")[0])), \":\")[0])\n  | where Domain matches regex oast\n  | project TimeGenerated, ClientIp = LocalIP, HostName = DeviceName, Domain, LogSource = \"MDE\"),\n  (ASimDnsActivityLogs\n  | where DnsQuery contains \"oast.\" or DnsQuery contains \"interact.sh\"\n  | where DnsQuery matches regex oast\n  | project TimeGenerated, ClientIp = SrcIpAddr, HostName = Dvc, Domain = DnsQuery, LogSource = \"ASimDns\")\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Lookups = count(),\n    Domains = make_set(Domain, 20)\n    by ClientIp, HostName, LogSource\n",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "InitialAccess",
+          "CommandAndControl"
+        ],
+        "techniques": [
+          "T1190",
+          "T1071"
+        ],
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "ClientIp"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "HostName"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "customDetails": {
+          "Lookups": "Lookups"
+        },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Callback OAST depuis {{HostName}} ({{ClientIp}})"
+        },
+        "incidentConfiguration": {
+          "createIncident": "[parameters('createIncidents')]",
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "P1D",
+            "matchingMethod": "Selected",
+            "groupByEntities": [
+              "Host"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "apiVersion": "2023-02-01",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', '6a1e0c0d-a7e5-4b1e-9001-000000000010')]",
+      "kind": "Scheduled",
+      "dependsOn": [
+        "[variables('fnWeb')]",
+        "[variables('fnAllow')]"
+      ],
+      "properties": {
+        "displayName": "ARTEX - Alertes Suricata du kit ARTEX (SID 9100001-9100099)",
+        "description": "Remonte dans Sentinel les alertes des regles rules/suricata/artex.rules, envoyees en Syslog\n(fast.log / sortie syslog de Suricata) ou en CEF. Couvre ce que les logs web ne voient pas :\nen-tetes X-ARTEX-*, corps multipart PHP_SESSION_UPLOAD_PROGRESS, acces aux ports 8787/8788.",
+        "severity": "Medium",
+        "enabled": "[parameters('enableRules')]",
+        "query": "union isfuzzy=true\n  (datatable(TimeGenerated:datetime, Sid:int, Msg:string, SrcIp:string, DstIp:string, Sensor:string)[]),\n  (Syslog\n  | where SyslogMessage contains \"[1:910\"\n  | extend Sid = toint(extract(@\"\\[1:(910\\d{4}):\\d+\\]\", 1, SyslogMessage))\n  | where Sid between (9100001 .. 9100099)\n  | project TimeGenerated, Sid,\n      Msg = trim(@\"\\s\", extract(@\"\\[1:910\\d{4}:\\d+\\]\\s*(.*?)\\s*\\[(Classification|\\*\\*)\", 1, SyslogMessage)),\n      SrcIp = extract(@\"\\}\\s*([0-9a-fA-F:.]+?)(?::\\d+)?\\s*->\", 1, SyslogMessage),\n      DstIp = extract(@\"->\\s*([0-9a-fA-F:.]+?)(?::\\d+)?\\s*$\", 1, SyslogMessage),\n      Sensor = Computer),\n  (CommonSecurityLog\n  | where DeviceProduct has \"Suricata\" or DeviceVendor has \"OISF\"\n  | extend Sid = toint(extract(@\"(910\\d{4})\", 1, DeviceEventClassID))\n  | where Sid between (9100001 .. 9100099)\n  | project TimeGenerated, Sid, Msg = Activity, SrcIp = SourceIP, DstIp = DestinationIP, Sensor = Computer)\n| where SrcIp !in (ArtexAllowlist)\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Hits = count(),\n    Sids = make_set(Sid), Messages = make_set(Msg, 10), Targets = make_set(DstIp, 20)\n    by SrcIp, Sensor\n| extend SidCount = array_length(Sids)\n",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Reconnaissance",
+          "InitialAccess"
+        ],
+        "techniques": [
+          "T1595",
+          "T1190"
+        ],
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SrcIp"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "customDetails": {
+          "Sids": "Sids",
+          "Hits": "Hits"
+        },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Suricata ARTEX : {{SidCount}} regle(s) depuis {{SrcIp}}"
+        },
+        "incidentConfiguration": {
+          "createIncident": "[parameters('createIncidents')]",
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "P1D",
+            "matchingMethod": "Selected",
+            "groupByEntities": [
+              "IP"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "apiVersion": "2023-02-01",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', '6a1e0c0d-a7e5-4b1e-9001-000000000011')]",
+      "kind": "Scheduled",
+      "dependsOn": [
+        "[variables('fnWeb')]",
+        "[variables('fnAllow')]"
+      ],
+      "properties": {
+        "displayName": "ARTEX - Verification de mise a jour d'une instance ARTEX interne",
+        "description": "Une instance ARTEX verifie ses mises a jour avec le User-Agent \"artex-update-check\". Vu dans les\nlogs du proxy ou du pare-feu sortant (CEF), il revele une instance ARTEX dans votre reseau.\nSuricata : SID 9100002.",
+        "severity": "Medium",
+        "enabled": "[parameters('enableRules')]",
+        "query": "ArtexWebRequests\n| where UserAgent =~ \"artex-update-check\"\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Requests = count(),\n    Destinations = make_set(Host, 10), LogSources = make_set(LogSource, 5)\n    by SrcIp\n",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "ResourceDevelopment"
+        ],
+        "techniques": [
+          "T1588"
+        ],
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SrcIp"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "customDetails": {
+          "Requests": "Requests"
+        },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Instance ARTEX interne probable : {{SrcIp}}"
+        },
+        "incidentConfiguration": {
+          "createIncident": "[parameters('createIncidents')]",
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "P7D",
+            "matchingMethod": "Selected",
+            "groupByEntities": [
+              "IP"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2020-08-01",
+      "name": "[concat(parameters('workspace'), '/artex-hunt-artex-instance-ports')]",
+      "dependsOn": [
+        "[variables('fnWeb')]",
+        "[variables('fnAllow')]"
+      ],
+      "properties": {
+        "category": "Hunting Queries",
+        "displayName": "ARTEX - Service a l'ecoute sur 8787 (UI/API) ou 8788 (proxy MITM)",
+        "query": "// Titre : ARTEX - Service a l'ecoute sur 8787 (UI/API) ou 8788 (proxy MITM)\n// Tactique : ResourceDevelopment (T1588)\n// Ports par defaut d'une instance ARTEX. A croiser avec la regle \"Instance ARTEX lancee sur un hote\".\nunion isfuzzy=true\n    (DeviceNetworkEvents\n    | where TimeGenerated > ago(7d)\n    | where (ActionType == \"ListeningConnectionCreated\" and LocalPort in (8787, 8788))\n        or (ActionType in (\"ConnectionSuccess\", \"InboundConnectionAccepted\") and RemotePort in (8787, 8788))\n    | project TimeGenerated, HostName = DeviceName, ActionType, LocalIP, LocalPort, RemoteIP, RemotePort,\n        Process = InitiatingProcessFileName, CommandLine = InitiatingProcessCommandLine),\n    (CommonSecurityLog\n    | where TimeGenerated > ago(7d)\n    | where DestinationPort in (8787, 8788)\n    | project TimeGenerated, HostName = DestinationHostName, ActionType = DeviceAction, LocalIP = DestinationIP,\n        LocalPort = DestinationPort, RemoteIP = SourceIP, RemotePort = SourcePort, Process = \"\", CommandLine = \"\")\n| summarize FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), Events = count(),\n    Peers = make_set(RemoteIP, 20), Processes = make_set(Process, 5)\n    by HostName, LocalIP, LocalPort\n| order by Events desc\n",
+        "version": 2,
+        "tags": [
+          {
+            "name": "description",
+            "value": "Ports par defaut d'une instance ARTEX. A croiser avec la regle \"Instance ARTEX lancee sur un hote\"."
+          },
+          {
+            "name": "tactics",
+            "value": "ResourceDevelopment"
+          },
+          {
+            "name": "techniques",
+            "value": "T1588"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2020-08-01",
+      "name": "[concat(parameters('workspace'), '/artex-hunt-artex-ip-timeline')]",
+      "dependsOn": [
+        "[variables('fnWeb')]",
+        "[variables('fnAllow')]"
+      ],
+      "properties": {
+        "category": "Hunting Queries",
+        "displayName": "ARTEX - Chronologie complete d'une IP suspecte",
+        "query": "// Titre : ARTEX - Chronologie complete d'une IP suspecte\n// Tactique : Reconnaissance (T1595)\n// Remplacer l'IP ci-dessous. Donne la fenetre d'attaque pour le retour d'experience (playbook, section 6).\nlet ip = \"192.0.2.66\";\nArtexWebRequests\n| where TimeGenerated > ago(30d)\n| where SrcIp == ip\n| project TimeGenerated, LogSource, Host, Method, Url, Status, UserAgent\n| order by TimeGenerated asc\n",
+        "version": 2,
+        "tags": [
+          {
+            "name": "description",
+            "value": "Remplacer l'IP ci-dessous. Donne la fenetre d'attaque pour le retour d'experience (playbook, section 6)."
+          },
+          {
+            "name": "tactics",
+            "value": "Reconnaissance"
+          },
+          {
+            "name": "techniques",
+            "value": "T1595"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2020-08-01",
+      "name": "[concat(parameters('workspace'), '/artex-hunt-artex-slow-scan')]",
+      "dependsOn": [
+        "[variables('fnWeb')]",
+        "[variables('fnAllow')]"
+      ],
+      "properties": {
+        "category": "Hunting Queries",
+        "displayName": "ARTEX - Scan lent (profil \"quiet\" ~2 req/s) sur 24 h",
+        "query": "// Titre : ARTEX - Scan lent (profil \"quiet\" ~2 req/s) sur 24 h\n// Tactique : Reconnaissance (T1595)\n// En profil \"quiet\", ARTEX reste sous les seuils de rafale. On cherche donc, sur 24 h, une IP\n// avec beaucoup de chemins distincts, une majorite d'erreurs 4xx et un debit regulier.\nlet periode = 24h;\nArtexWebRequests\n| where TimeGenerated > ago(periode)\n| where SrcIp !in (ArtexAllowlist)\n| summarize Requests = count(), Errors4xx = countif(Status between (400 .. 499)),\n    DistinctPaths = dcount(UrlPath), ActiveMinutes = dcount(bin(TimeGenerated, 1m)),\n    StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), UserAgents = make_set(UserAgent, 5)\n    by SrcIp\n| extend ErrorRatio = round(todouble(Errors4xx) / Requests, 2),\n    AvgPerActiveMinute = round(todouble(Requests) / ActiveMinutes, 1)\n| where DistinctPaths >= 300 and ErrorRatio >= 0.6\n| order by DistinctPaths desc\n",
+        "version": 2,
+        "tags": [
+          {
+            "name": "description",
+            "value": "En profil \"quiet\", ARTEX reste sous les seuils de rafale. On cherche donc, sur 24 h, une IP avec beaucoup de chemins distincts, une majorite d'erreurs 4xx et un debit regulier."
+          },
+          {
+            "name": "tactics",
+            "value": "Reconnaissance"
+          },
+          {
+            "name": "techniques",
+            "value": "T1595"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2020-08-01",
+      "name": "[concat(parameters('workspace'), '/artex-hunt-artex-successful-exploitation')]",
+      "dependsOn": [
+        "[variables('fnWeb')]",
+        "[variables('fnAllow')]"
+      ],
+      "properties": {
+        "category": "Hunting Queries",
+        "displayName": "ARTEX - Charges d'exploitation ayant recu une reponse 200/500",
+        "query": "// Titre : ARTEX - Charges d'exploitation ayant recu une reponse 200/500\n// Tactique : InitialAccess (T1190)\n// Pour la qualification P2/P1 du playbook : quelles charges ont abouti, sur quels hotes ?\nlet periode = 7d;\nArtexWebRequests\n| where TimeGenerated > ago(periode)\n| extend Category = case(\n    Target matches regex @\"(?i)sess_[a-z0-9,-]{6,}\", \"php2shell\",\n    Target matches regex @\"(?i)(\\.\\./){3,}|/etc/passwd|php://(filter|input)|data://text/plain|expect://\", \"LFI\",\n    Target matches regex @\"(?i)union(\\s|\\+)+(all(\\s|\\+)+)?select|sleep\\(\\d+\\)|waitfor(\\s|\\+)+delay|extractvalue\\(|updatexml\\(\", \"SQLi\",\n    Target matches regex @\"(?i)<script|onerror\\s*=|javascript:alert|<svg\", \"XSS\",\n    Target matches regex @\"(?i);\\s*(id|whoami|uname)\\b|\\|\\s*(id|whoami)\\b|\\$\\(id\\)\", \"Injection de commande\",\n    \"\")\n| where isnotempty(Category)\n| where Status == 200 or Status >= 500\n| summarize Hits = count(), Statuses = make_set(Status), SampleUrls = make_set(Url, 5),\n    FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated)\n    by SrcIp, Host, Category\n| order by Category asc, Hits desc\n",
+        "version": 2,
+        "tags": [
+          {
+            "name": "description",
+            "value": "Pour la qualification P2/P1 du playbook : quelles charges ont abouti, sur quels hotes ?"
+          },
+          {
+            "name": "tactics",
+            "value": "InitialAccess"
+          },
+          {
+            "name": "techniques",
+            "value": "T1190"
+          }
+        ]
+      }
+    },
+    {
+      "condition": "[parameters('deployWorkbook')]",
+      "type": "Microsoft.Insights/workbooks",
+      "apiVersion": "2022-04-01",
+      "name": "c46f6a48-e533-5ad7-a70c-59ffd5170a94",
+      "location": "[resourceGroup().location]",
+      "kind": "shared",
+      "dependsOn": [
+        "[variables('fnWeb')]",
+        "[variables('fnAllow')]"
+      ],
+      "properties": {
+        "displayName": "ARTEX - Vue d'ensemble",
+        "serializedData": "{\"version\": \"Notebook/1.0\", \"items\": [{\"type\": 1, \"name\": \"intro\", \"content\": {\"json\": \"## ARTEX - Vue d'ensemble\\nActivite liee a ARTEX (plateforme de pentest autonome) vue dans vos logs web, DNS et EDR. Les IP de la watchlist **ArtexAllowlist** sont exclues. Playbook : `playbook/PLAYBOOK.md` du depot.\"}}, {\"type\": 9, \"name\": \"params\", \"content\": {\"version\": \"KqlParameterItem/1.0\", \"style\": \"pills\", \"queryType\": 0, \"resourceType\": \"microsoft.operationalinsights/workspaces\", \"parameters\": [{\"id\": \"9d6d2c1e-0001-4a51-9e0b-7a1e0c0d0001\", \"version\": \"KqlParameterItem/1.0\", \"name\": \"TimeRange\", \"label\": \"Periode\", \"type\": 4, \"isRequired\": true, \"value\": {\"durationMs\": 86400000}, \"typeSettings\": {\"selectableValues\": [{\"durationMs\": 3600000}, {\"durationMs\": 14400000}, {\"durationMs\": 86400000}, {\"durationMs\": 259200000}, {\"durationMs\": 604800000}, {\"durationMs\": 2592000000}], \"allowCustom\": true}}]}}, {\"type\": 3, \"content\": {\"version\": \"KqlItem/1.0\", \"query\": \"ArtexWebRequests\\n| where SrcIp !in (ArtexAllowlist)\\n| extend Category = case(\\n    UserAgent startswith \\\"ARTEX-Assessment/\\\", \\\"UA ARTEX-Assessment\\\",\\n    Target matches regex @\\\"(?i)sess_[a-z0-9,-]{6,}\\\", \\\"php2shell\\\",\\n    Target matches regex @\\\"(?i)(\\\\.\\\\./){3,}|/etc/passwd|php://(filter|input)|data://text/plain|expect://\\\", \\\"LFI\\\",\\n    Target matches regex @\\\"(?i)union(\\\\s|\\\\+)+(all(\\\\s|\\\\+)+)?select|sleep\\\\(\\\\d+\\\\)|waitfor(\\\\s|\\\\+)+delay|extractvalue\\\\(|updatexml\\\\(\\\", \\\"SQLi\\\",\\n    Target matches regex @\\\"(?i)<script|onerror\\\\s*=|javascript:alert|<svg\\\", \\\"XSS\\\",\\n    UserAgent matches regex @\\\"(?i)sqlmap/|Fuzz Faster U Fool|Nmap Scripting Engine|\\\\(Hydra\\\\)|nuclei|dalfox|HeadlessChrome\\\", \\\"UA outil ARTEX\\\",\\n    \\\"\\\")\\n| where isnotempty(Category)\\n| summarize Requetes = count() by Category\\n| order by Requetes desc\", \"size\": 3, \"title\": \"Requetes suspectes par categorie\", \"timeContextFromParameter\": \"TimeRange\", \"queryType\": 0, \"resourceType\": \"microsoft.operationalinsights/workspaces\", \"visualization\": \"tiles\", \"tileSettings\": {\"titleContent\": {\"columnMatch\": \"Category\"}, \"leftContent\": {\"columnMatch\": \"Requetes\", \"formatter\": 12, \"formatOptions\": {\"palette\": \"auto\"}}, \"showBorder\": true}}, \"name\": \"tiles\"}, {\"type\": 3, \"content\": {\"version\": \"KqlItem/1.0\", \"query\": \"ArtexWebRequests\\n| where SrcIp !in (ArtexAllowlist)\\n| extend Category = case(\\n    UserAgent startswith \\\"ARTEX-Assessment/\\\", \\\"UA ARTEX-Assessment\\\",\\n    Target matches regex @\\\"(?i)sess_[a-z0-9,-]{6,}\\\", \\\"php2shell\\\",\\n    Target matches regex @\\\"(?i)(\\\\.\\\\./){3,}|/etc/passwd|php://(filter|input)|data://text/plain|expect://\\\", \\\"LFI\\\",\\n    Target matches regex @\\\"(?i)union(\\\\s|\\\\+)+(all(\\\\s|\\\\+)+)?select|sleep\\\\(\\\\d+\\\\)|waitfor(\\\\s|\\\\+)+delay|extractvalue\\\\(|updatexml\\\\(\\\", \\\"SQLi\\\",\\n    Target matches regex @\\\"(?i)<script|onerror\\\\s*=|javascript:alert|<svg\\\", \\\"XSS\\\",\\n    UserAgent matches regex @\\\"(?i)sqlmap/|Fuzz Faster U Fool|Nmap Scripting Engine|\\\\(Hydra\\\\)|nuclei|dalfox|HeadlessChrome\\\", \\\"UA outil ARTEX\\\",\\n    \\\"\\\")\\n| where isnotempty(Category)\\n| summarize Requetes = count() by Category, bin(TimeGenerated, {TimeRange:grain})\", \"size\": 0, \"title\": \"Chronologie des requetes suspectes\", \"timeContextFromParameter\": \"TimeRange\", \"queryType\": 0, \"resourceType\": \"microsoft.operationalinsights/workspaces\", \"visualization\": \"timechart\"}, \"name\": \"timeline\"}, {\"type\": 3, \"content\": {\"version\": \"KqlItem/1.0\", \"query\": \"ArtexWebRequests\\n| where SrcIp !in (ArtexAllowlist)\\n| extend Category = case(\\n    UserAgent startswith \\\"ARTEX-Assessment/\\\", \\\"UA ARTEX-Assessment\\\",\\n    Target matches regex @\\\"(?i)sess_[a-z0-9,-]{6,}\\\", \\\"php2shell\\\",\\n    Target matches regex @\\\"(?i)(\\\\.\\\\./){3,}|/etc/passwd|php://(filter|input)|data://text/plain|expect://\\\", \\\"LFI\\\",\\n    Target matches regex @\\\"(?i)union(\\\\s|\\\\+)+(all(\\\\s|\\\\+)+)?select|sleep\\\\(\\\\d+\\\\)|waitfor(\\\\s|\\\\+)+delay|extractvalue\\\\(|updatexml\\\\(\\\", \\\"SQLi\\\",\\n    Target matches regex @\\\"(?i)<script|onerror\\\\s*=|javascript:alert|<svg\\\", \\\"XSS\\\",\\n    UserAgent matches regex @\\\"(?i)sqlmap/|Fuzz Faster U Fool|Nmap Scripting Engine|\\\\(Hydra\\\\)|nuclei|dalfox|HeadlessChrome\\\", \\\"UA outil ARTEX\\\",\\n    \\\"\\\")\\n| where isnotempty(Category)\\n| summarize Requetes = count(), Categories = make_set(Category), Reussites200 = countif(Status == 200), Hotes = make_set(Host, 10), Debut = min(TimeGenerated), Fin = max(TimeGenerated) by SrcIp\\n| order by array_length(Categories) desc, Requetes desc\\n| take 50\", \"size\": 0, \"title\": \"IP sources les plus actives (cliquer une ligne pour filtrer les URL)\", \"timeContextFromParameter\": \"TimeRange\", \"queryType\": 0, \"resourceType\": \"microsoft.operationalinsights/workspaces\", \"visualization\": \"table\", \"exportFieldName\": \"SrcIp\", \"exportParameterName\": \"SelectedIp\", \"exportDefaultValue\": \"*\"}, \"name\": \"topip\"}, {\"type\": 3, \"content\": {\"version\": \"KqlItem/1.0\", \"query\": \"ArtexWebRequests\\n| where '{SelectedIp}' == '*' or SrcIp == '{SelectedIp}'\\n| where SrcIp !in (ArtexAllowlist)\\n| extend Category = case(\\n    UserAgent startswith \\\"ARTEX-Assessment/\\\", \\\"UA ARTEX-Assessment\\\",\\n    Target matches regex @\\\"(?i)sess_[a-z0-9,-]{6,}\\\", \\\"php2shell\\\",\\n    Target matches regex @\\\"(?i)(\\\\.\\\\./){3,}|/etc/passwd|php://(filter|input)|data://text/plain|expect://\\\", \\\"LFI\\\",\\n    Target matches regex @\\\"(?i)union(\\\\s|\\\\+)+(all(\\\\s|\\\\+)+)?select|sleep\\\\(\\\\d+\\\\)|waitfor(\\\\s|\\\\+)+delay|extractvalue\\\\(|updatexml\\\\(\\\", \\\"SQLi\\\",\\n    Target matches regex @\\\"(?i)<script|onerror\\\\s*=|javascript:alert|<svg\\\", \\\"XSS\\\",\\n    UserAgent matches regex @\\\"(?i)sqlmap/|Fuzz Faster U Fool|Nmap Scripting Engine|\\\\(Hydra\\\\)|nuclei|dalfox|HeadlessChrome\\\", \\\"UA outil ARTEX\\\",\\n    \\\"\\\")\\n| where isnotempty(Category)\\n| project TimeGenerated, SrcIp, LogSource, Host, Method, Url, Status, UserAgent, Category\\n| order by TimeGenerated desc\\n| take 200\", \"size\": 0, \"title\": \"Echantillon de requetes (IP selectionnee)\", \"timeContextFromParameter\": \"TimeRange\", \"queryType\": 0, \"resourceType\": \"microsoft.operationalinsights/workspaces\", \"visualization\": \"table\"}, \"name\": \"urls\"}, {\"type\": 3, \"content\": {\"version\": \"KqlItem/1.0\", \"query\": \"SecurityIncident\\n| where Title has \\\"ARTEX\\\" or Title has \\\"php2shell\\\" or Title has \\\"OAST\\\" or Title has \\\"Suricata ARTEX\\\"\\n| summarize arg_max(LastModifiedTime, *) by IncidentNumber\\n| project IncidentNumber, Title, Severity, Status, Owner = tostring(Owner.assignedTo), CreatedTime\\n| order by CreatedTime desc\", \"size\": 0, \"title\": \"Incidents ARTEX\", \"timeContextFromParameter\": \"TimeRange\", \"queryType\": 0, \"resourceType\": \"microsoft.operationalinsights/workspaces\", \"visualization\": \"table\"}, \"name\": \"incidents\"}], \"fallbackResourceIds\": [], \"$schema\": \"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}",
+        "version": "1.0",
+        "sourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace'))]",
+        "category": "sentinel"
+      }
+    }
+  ]
+}

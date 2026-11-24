@@ -29,6 +29,8 @@ Conséquences pour la défense :
 
 1. Déployer `rules/suricata/artex.rules` sur l'IDS en bordure des serveurs web (SID 9100001-9100060).
 2. Convertir `rules/sigma/*.yml` vers votre SIEM (`sigma convert -t splunk|elasticsearch|...`).
+   Pour **Microsoft Sentinel**, déployer directement `sentinel/deploy/azuredeploy.json`
+   (règles KQL, chasse, classeur) : voir `sentinel/README.md`.
 3. Planifier `tools/artex_triage.py logs` toutes les heures sur les journaux d'accès.
 4. Durcir PHP : `session.upload_progress.enabled = 0` si inutile, PHP ≥ 8.2.35 / 8.3.36 / 8.4.27 /
    8.5.12, `open_basedir`, `allow_url_include = Off`, et un répertoire de sessions hors de portée
