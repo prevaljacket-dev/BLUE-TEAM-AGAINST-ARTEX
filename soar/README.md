@@ -18,6 +18,8 @@ règles Suricata/Sigma/YARA, `playbook/PLAYBOOK.md`) et le rend automatique :
 > scanne pas, ne contacte pas et n'attaque pas la source. Il n'existe aucun connecteur offensif
 > et il ne faut pas en ajouter.
 
+![Tableau de bord ARTEX SOAR](docs/dashboard.png)
+
 ## Sécurité par défaut
 
 | Garde-fou | Effet |
@@ -63,8 +65,16 @@ docker compose --profile shipper up -d
 
 ## Utilisation au quotidien
 
-- **Tableau de bord** (`/`) : incidents, actions en attente (Approuver / Rejeter), dernières actions
-  avec les commandes exécutées ou simulées, bouton « Faux positif ».
+- **Tableau de bord** (`http://127.0.0.1:8080`) : thème sombre de type SOC (thème clair disponible), adapté au mobile.
+  - *Vue d'ensemble* : indicateurs clés (incidents actifs, P1, décisions en attente, IP bloquées ou à bloquer),
+    progression des attaques par étape, répartition par gravité, actions à traiter, incidents récents.
+  - *Incidents* : filtres (actifs, P1/P2/P3, ARTEX confirmé, clos) et recherche. Un clic ouvre le détail :
+    score, étape atteinte, techniques ATT&CK, indicateurs (ceux qui ont abouti sont signalés), chronologie
+    de la réponse avec les commandes exécutées ou simulées, requêtes observées, boutons Clore / Faux positif.
+  - *Approbations* : boutons Approuver / Rejeter pour les actions sensibles (isolation).
+  - *Actions* et *Audit* : historique complet, filtrable.
+
+  ![Détail d'un incident](docs/dashboard-incident.png)
 - **API** : documentation interactive sur `/docs`. Clé dans `X-API-Key`, nom de l'analyste dans
   `X-SOAR-User` (repris dans l'audit).
 

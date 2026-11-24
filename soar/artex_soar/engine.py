@@ -201,6 +201,8 @@ class Engine:
                 if tag in inc["fired"]:
                     continue
                 inc["fired"].append(tag)
+                if spec["type"] == "block_ip" and inc["kind"] == "host":
+                    continue  # un IOC sur un serveur n'a pas d'IP source a bloquer
                 created.append(self._create_action(pb["name"], spec, inc))
         if created:
             self.store.save_incident(inc)
