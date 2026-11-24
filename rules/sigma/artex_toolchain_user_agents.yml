@@ -1,0 +1,32 @@
+title: ARTEX - User-Agents des outils embarques (sqlmap, ffuf, Nmap NSE, Hydra, Chromium headless)
+id: 3f6c1a52-8e1d-4c7b-9b8a-a1e0c0de0002
+status: experimental
+description: User-Agents par defaut des scanners livres dans l'image Docker d'ARTEX.
+references:
+  - https://github.com/BaaRai/ARTEX/blob/main/Dockerfile
+author: ARTEX blue team
+date: 2026-11-24
+tags:
+  - attack.reconnaissance
+  - attack.t1595.002
+  - attack.t1595.003
+  - attack.initial_access
+  - attack.t1190
+  - attack.credential_access
+  - attack.t1110
+logsource:
+  category: webserver
+detection:
+  selection:
+    cs-user-agent|contains:
+      - 'sqlmap/'
+      - 'Fuzz Faster U Fool'
+      - 'Nmap Scripting Engine'
+      - '(Hydra)'
+      - 'HeadlessChrome'
+      - 'nuclei'
+  condition: selection
+falsepositives:
+  - Scanners internes autorises
+  - Supervision synthetique en navigateur headless
+level: medium
