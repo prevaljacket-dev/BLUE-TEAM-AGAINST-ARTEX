@@ -1,0 +1,38 @@
+# ARTEX blue team - Suricata rules
+# Plage SID locale : 9100001-9100099. Ajuster $HOME_NET / $HTTP_SERVERS a votre environnement.
+# Detection uniquement (alert). Passer en "drop" seulement en mode IPS apres validation.
+
+# --- Identifiants propres a ARTEX ---------------------------------------------------------
+alert http any any -> $HOME_NET any (msg:"ARTEX - User-Agent d'evaluation ARTEX-Assessment"; flow:established,to_server; http.user_agent; content:"ARTEX-Assessment/"; startswith; classtype:attempted-recon; sid:9100001; rev:1; metadata:mitre_technique T1595, tool ARTEX;)
+alert http $HOME_NET any -> any any (msg:"ARTEX - Verification de mise a jour d'une instance ARTEX interne"; flow:established,to_server; http.user_agent; content:"artex-update-check"; bsize:18; classtype:policy-violation; sid:9100002; rev:1; metadata:tool ARTEX;)
+alert http any any -> $HOME_NET any (msg:"ARTEX - En-tete interne X-ARTEX-Replay-Nonce (rejeu de trafic)"; flow:established,to_server; http.header_names; content:"X-ARTEX-Replay-Nonce"; nocase; classtype:attempted-recon; sid:9100003; rev:1; metadata:tool ARTEX;)
+alert http any any -> $HOME_NET any (msg:"ARTEX - En-tete interne X-Artex-Hook (requete alteree)"; flow:established,to_server; http.header_names; content:"X-Artex-Hook"; nocase; classtype:attempted-recon; sid:9100004; rev:1; metadata:tool ARTEX;)
+alert http any any -> $HOME_NET any (msg:"ARTEX - En-tete X-ARTEX-HAR (export HAR rejoue)"; flow:established,to_server; http.header_names; content:"X-ARTEX-HAR-"; nocase; classtype:attempted-recon; sid:9100005; rev:1; metadata:tool ARTEX;)
+
+# --- Instance ARTEX sur le reseau interne (UI 8787, proxy MITM 8788) -----------------------
+alert http $HOME_NET any -> $HOME_NET 8787 (msg:"ARTEX - Acces a l'API/UI ARTEX (port 8787)"; flow:established,to_server; http.uri; content:"/api/"; startswith; pcre:"/^\/api\/(tasks|traffic|findings|assets|setup)/"; classtype:policy-violation; sid:9100010; rev:1; metadata:tool ARTEX;)
+alert http $HOME_NET any -> $HOME_NET 8787 (msg:"ARTEX - Page de premiere configuration /setup"; flow:established,to_server; http.uri; content:"/setup"; startswith; classtype:policy-violation; sid:9100011; rev:1; metadata:tool ARTEX;)
+alert http any any -> any 8787 (msg:"ARTEX - Ingestion de trafic par l'extension navigateur"; flow:established,to_server; http.method; content:"POST"; http.uri; content:"/api/traffic/ingest"; classtype:policy-violation; sid:9100012; rev:1; metadata:tool ARTEX;)
+
+# --- Outillage embarque dans l'image ARTEX ------------------------------------------------
+alert http any any -> $HOME_NET any (msg:"ARTEX/outil - sqlmap User-Agent"; flow:established,to_server; http.user_agent; content:"sqlmap/"; startswith; classtype:web-application-attack; sid:9100020; rev:1; metadata:mitre_technique T1190;)
+alert http any any -> $HOME_NET any (msg:"ARTEX/outil - ffuf User-Agent"; flow:established,to_server; http.user_agent; content:"Fuzz Faster U Fool"; classtype:attempted-recon; sid:9100021; rev:1; metadata:mitre_technique T1595.003;)
+alert http any any -> $HOME_NET any (msg:"ARTEX/outil - Nmap Scripting Engine User-Agent"; flow:established,to_server; http.user_agent; content:"Nmap Scripting Engine"; classtype:attempted-recon; sid:9100022; rev:1; metadata:mitre_technique T1595.002;)
+alert http any any -> $HOME_NET any (msg:"ARTEX/outil - Hydra User-Agent (brute force HTTP)"; flow:established,to_server; http.user_agent; content:"(Hydra)"; classtype:attempted-user; sid:9100023; rev:1; metadata:mitre_technique T1110;)
+alert http any any -> $HOME_NET any (msg:"ARTEX/outil - Navigateur headless (Playwright/Chromium)"; flow:established,to_server; http.user_agent; content:"HeadlessChrome"; classtype:attempted-recon; sid:9100024; rev:1; metadata:mitre_technique T1595;)
+alert http any any -> $HOME_NET any (msg:"ARTEX/outil - Marqueur nuclei dans la requete"; flow:established,to_server; http.header; content:"nuclei"; nocase; classtype:attempted-recon; sid:9100025; rev:1; metadata:mitre_technique T1595.002;)
+
+# --- Callbacks OAST (nuclei / interactsh) ------------------------------------------------
+alert dns $HOME_NET any -> any any (msg:"ARTEX/outil - Resolution d'un domaine OAST interactsh (callback nuclei)"; dns.query; pcre:"/\.oast\.(pro|live|site|online|fun|me)$/i"; classtype:trojan-activity; sid:9100030; rev:1; metadata:mitre_technique T1190;)
+alert dns $HOME_NET any -> any any (msg:"ARTEX/outil - Resolution d'un domaine interact.sh"; dns.query; content:".interact.sh"; endswith; nocase; classtype:trojan-activity; sid:9100031; rev:1; metadata:mitre_technique T1190;)
+
+# --- Chaine php2shell (LFI -> RCE via session.upload_progress) ----------------------------
+alert http any any -> $HOME_NET any (msg:"ARTEX/php2shell - Upload multipart avec PHP_SESSION_UPLOAD_PROGRESS"; flow:established,to_server; http.method; content:"POST"; http.request_body; content:"name=\"PHP_SESSION_UPLOAD_PROGRESS\""; nocase; classtype:web-application-attack; sid:9100040; rev:1; metadata:mitre_technique T1190;)
+alert http any any -> $HOME_NET any (msg:"ARTEX/php2shell - Code PHP dans le champ PHP_SESSION_UPLOAD_PROGRESS"; flow:established,to_server; http.request_body; content:"PHP_SESSION_UPLOAD_PROGRESS"; nocase; content:"<?"; distance:0; within:200; classtype:web-application-attack; sid:9100041; rev:1; metadata:mitre_technique T1190, mitre_technique T1059.004;)
+alert http any any -> $HOME_NET any (msg:"ARTEX/php2shell - Inclusion d'un fichier de session PHP via LFI"; flow:established,to_server; http.uri; pcre:"/(\.\.\/|%2e%2e%2f|\/tmp\/|\/var\/lib\/php\/sessions\/).*sess_[a-z0-9,-]{1,128}/Ui"; classtype:web-application-attack; sid:9100042; rev:1; metadata:mitre_technique T1190;)
+
+# --- LFI generique (aussi utilise par la chaine php2shell) --------------------------------
+alert http any any -> $HOME_NET any (msg:"ARTEX - Tentative de LFI / traversee de repertoire"; flow:established,to_server; http.uri; pcre:"/(\.\.\/){3,}|(%2e%2e(%2f|\/)){3,}|\/etc\/passwd|php:\/\/filter|php:\/\/input|data:\/\/text\/plain/Ui"; classtype:web-application-attack; sid:9100050; rev:1; metadata:mitre_technique T1190;)
+
+# --- Seuils de rafale (scan automatise, profil "off" par defaut) -------------------------
+alert http any any -> $HOME_NET any (msg:"ARTEX - Rafale de requetes HTTP (>100 en 10s depuis une source)"; flow:established,to_server; threshold:type both, track by_src, count 100, seconds 10; classtype:attempted-recon; sid:9100060; rev:1; metadata:mitre_technique T1595;)

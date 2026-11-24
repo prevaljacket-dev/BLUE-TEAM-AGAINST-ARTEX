@@ -1,0 +1,32 @@
+title: ARTEX php2shell - Inclusion d'un fichier de session PHP via LFI
+id: 3f6c1a52-8e1d-4c7b-9b8a-a1e0c0de0003
+status: experimental
+description: >
+  Etape finale de la chaine php2shell d'ARTEX : un parametre d'inclusion pointe vers un fichier
+  sess_* (rempli au prealable via PHP_SESSION_UPLOAD_PROGRESS) pour executer du code.
+references:
+  - https://github.com/BaaRai/ARTEX/tree/main/skills/php2shell
+author: ARTEX blue team
+date: 2026-11-24
+tags:
+  - attack.initial_access
+  - attack.t1190
+  - attack.execution
+  - attack.t1059.004
+logsource:
+  category: webserver
+detection:
+  selection_sess:
+    cs-uri-query|contains: 'sess_'
+  selection_path:
+    cs-uri-query|contains:
+      - '../'
+      - '..%2f'
+      - '%2e%2e'
+      - '/tmp/'
+      - '/var/lib/php/sessions'
+      - '/var/lib/php5'
+  condition: all of selection_*
+falsepositives:
+  - Peu probables
+level: critical

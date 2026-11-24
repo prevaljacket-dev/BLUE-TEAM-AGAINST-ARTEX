@@ -1,0 +1,30 @@
+title: ARTEX - Instance ARTEX lancee sur un hote interne
+id: 3f6c1a52-8e1d-4c7b-9b8a-a1e0c0de0006
+status: experimental
+description: >
+  Demarrage du serveur ARTEX ou de son conteneur. Legitime seulement pour l'equipe offensive autorisee ;
+  sinon un attaquant (ou un insider) heberge une plateforme de pentest autonome chez vous.
+author: ARTEX blue team
+date: 2026-11-24
+tags:
+  - attack.resource_development
+  - attack.t1588.002
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection_bin:
+    Image|endswith: '/artex'
+  selection_docker:
+    CommandLine|contains:
+      - 'ghcr.io/baarai/artex'
+      - 'BaaRai/ARTEX'
+  selection_env:
+    CommandLine|contains:
+      - 'ARTEX_NOISE_PROFILE'
+      - 'ARTEX_PG_HOST'
+      - 'ARTEX_BIND_ADDR'
+  condition: 1 of selection_*
+falsepositives:
+  - Deploiement autorise par l'equipe red team
+level: high
