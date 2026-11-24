@@ -1,0 +1,35 @@
+# Demarrage : cp .env.example .env  (changer SOAR_API_KEY)  puis  docker compose up -d --build
+# API + tableau de bord : http://127.0.0.1:8080
+services:
+  soar:
+    build:
+      context: ..
+      dockerfile: soar/Dockerfile
+    image: artex-soar:0.1.0
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:8080:8080"     # n'exposez pas l'API sur Internet
+    volumes:
+      - ./config:/app/soar/config:ro
+      - soar-data:/app/soar/data
+    # Mode enforce avec nftables/ipset sur l'hote : decommentez (et lisez docs/DEPLOIEMENT.md).
+    # network_mode: host
+    # cap_add: [NET_ADMIN]
+    # user: root
+
+  # Agent qui suit les journaux nginx de l'hote et les envoie au SOAR.
+  shipper:
+    image: artex-soar:0.1.0
+    depends_on: [soar]
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SOAR_URL: http://soar:8080
+    command: ["ship", "/logs/access.log", "--target", "${SOAR_TARGET:-web01}"]
+    volumes:
+      - ${NGINX_LOG_DIR:-/var/log/nginx}:/logs:ro
+    profiles: ["shipper"]
+
+volumes:
+  soar-data:
