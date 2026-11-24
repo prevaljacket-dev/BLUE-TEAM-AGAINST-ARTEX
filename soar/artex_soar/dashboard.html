@@ -1,78 +1,636 @@
 <!doctype html>
-<html lang="fr">
+<html lang="fr" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ARTEX SOAR</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%2322d3ee' d='M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5z'/%3E%3C/svg%3E">
 <style>
-  :root { --bg:#f6f7f9; --fg:#1b1f24; --muted:#5b6470; --card:#fff; --line:#dde1e6;
-          --p1:#b42318; --p2:#b54708; --p3:#175cd3; --ok:#067647; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#111418; --fg:#e6e8eb; --muted:#9aa3ad; --card:#1a1e23; --line:#2b3138;
-            --p1:#f97066; --p2:#fdb022; --p3:#84adff; --ok:#47cd89; } }
-  body { margin:0; font:14px/1.45 system-ui, sans-serif; background:var(--bg); color:var(--fg); }
-  header { padding:16px; border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-  h1 { font-size:18px; margin:0; } h2 { font-size:15px; margin:20px 0 8px; }
-  main { padding:0 16px 32px; max-width:1200px; margin:auto; }
-  .badge { padding:2px 8px; border-radius:10px; font-weight:600; font-size:12px; border:1px solid currentColor; }
-  .P1 { color:var(--p1); } .P2 { color:var(--p2); } .P3 { color:var(--p3); } .ok { color:var(--ok); }
-  .wrap { overflow-x:auto; background:var(--card); border:1px solid var(--line); border-radius:8px; }
-  table { border-collapse:collapse; width:100%; } td, th { text-align:left; padding:8px; border-bottom:1px solid var(--line); vertical-align:top; }
-  th { color:var(--muted); font-weight:600; font-size:12px; }
-  button { font:inherit; padding:4px 10px; border-radius:6px; border:1px solid var(--line); background:var(--card); color:var(--fg); cursor:pointer; }
-  button.primary { border-color:var(--ok); color:var(--ok); }
-  input { font:inherit; padding:4px 8px; border-radius:6px; border:1px solid var(--line); background:var(--card); color:var(--fg); }
-  .muted { color:var(--muted); } code { font-size:12px; word-break:break-all; }
+  :root, :root[data-theme="dark"] {
+    --bg: #0a0e14; --bg2: #0f141c; --panel: #131a24; --panel2: #18212d; --line: #232d3b; --line2: #2e3a4b;
+    --fg: #e6edf5; --fg2: #a9b6c6; --muted: #6f7f93;
+    --accent: #22d3ee; --accent-soft: rgba(34, 211, 238, .12);
+    --p1: #ff4d5e; --p1-soft: rgba(255, 77, 94, .14);
+    --p2: #ff9f43; --p2-soft: rgba(255, 159, 67, .14);
+    --p3: #4ea8ff; --p3-soft: rgba(78, 168, 255, .14);
+    --ok: #34d399; --ok-soft: rgba(52, 211, 153, .13);
+    --violet: #b78bff; --violet-soft: rgba(183, 139, 255, .14);
+    --shadow: 0 10px 30px rgba(0, 0, 0, .35);
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #f3f5f8; --bg2: #eceff4; --panel: #ffffff; --panel2: #f7f9fb; --line: #e1e6ed; --line2: #cfd7e2;
+    --fg: #121a24; --fg2: #3d4a5a; --muted: #6b7889;
+    --accent: #0891b2; --accent-soft: rgba(8, 145, 178, .1);
+    --p1: #d92d3c; --p1-soft: rgba(217, 45, 60, .1);
+    --p2: #c2610c; --p2-soft: rgba(194, 97, 12, .1);
+    --p3: #1d6fd6; --p3-soft: rgba(29, 111, 214, .1);
+    --ok: #0f8a5f; --ok-soft: rgba(15, 138, 95, .1);
+    --violet: #7c4ddb; --violet-soft: rgba(124, 77, 219, .1);
+    --shadow: 0 10px 30px rgba(18, 26, 36, .12);
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--bg); color: var(--fg); font: 14px/1.5 Inter, "Segoe UI", system-ui, -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
+  code, .mono { font-family: "JetBrains Mono", "Cascadia Code", Consolas, ui-monospace, monospace; font-size: 12.5px; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  input, select { font: inherit; color: var(--fg); }
+  a { color: var(--accent); }
+
+  /* ---------- structure ---------- */
+  .app { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+  aside { background: var(--bg2); border-right: 1px solid var(--line); padding: 20px 14px; display: flex; flex-direction: column; gap: 22px; position: sticky; top: 0; height: 100vh; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 0 6px; }
+  .brand svg { width: 30px; height: 30px; flex: none; }
+  .brand b { font-size: 16px; letter-spacing: .4px; }
+  .brand small { display: block; color: var(--muted); font-size: 11px; letter-spacing: .3px; }
+  nav { display: flex; flex-direction: column; gap: 2px; }
+  nav button { display: flex; align-items: center; gap: 10px; background: none; border: 0; border-radius: 8px; padding: 9px 10px; color: var(--fg2); text-align: left; font-weight: 500; }
+  nav button svg { width: 17px; height: 17px; flex: none; opacity: .85; }
+  nav button:hover { background: var(--panel); color: var(--fg); }
+  nav button.active { background: var(--accent-soft); color: var(--accent); }
+  nav .count { margin-left: auto; background: var(--p1); color: #fff; font-size: 11px; font-weight: 700; border-radius: 10px; padding: 0 7px; min-width: 20px; text-align: center; }
+  .side-block { border-top: 1px solid var(--line); padding-top: 16px; }
+  .side-title { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .8px; margin: 0 6px 8px; }
+  .conn { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 6px; font-size: 12.5px; color: var(--fg2); }
+  .side-foot { margin-top: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+  main { min-width: 0; padding: 24px 28px 48px; }
+  .topbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; }
+  .topbar h1 { font-size: 22px; margin: 0; font-weight: 650; letter-spacing: -.2px; }
+  .topbar .sub { color: var(--muted); font-size: 13px; }
+  .grow { flex: 1; }
+  .live { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12.5px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 0 var(--ok); animation: pulse 2s infinite; }
+  .dot.off { background: var(--p1); animation: none; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, .5); } 70% { box-shadow: 0 0 0 8px rgba(52, 211, 153, 0); } 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); } }
+  @media (prefers-reduced-motion: reduce) { .dot { animation: none; } }
+
+  /* ---------- composants ---------- */
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+  .panel-h { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .panel-h h2 { font-size: 14px; margin: 0; font-weight: 600; }
+  .panel-h .hint { color: var(--muted); font-size: 12.5px; }
+  .panel-b { padding: 14px 16px; }
+  .grid { display: grid; gap: 16px; }
+  .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .two { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); }
+  .kpi { padding: 16px; position: relative; overflow: hidden; }
+  .kpi .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .7px; }
+  .kpi .value { font-size: 30px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .kpi .note { color: var(--fg2); font-size: 12.5px; }
+  .kpi::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--kc, var(--accent)); }
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; letter-spacing: .3px; white-space: nowrap; border: 1px solid transparent; }
+  .sev-P1 { color: var(--p1); background: var(--p1-soft); border-color: color-mix(in srgb, var(--p1) 35%, transparent); }
+  .sev-P2 { color: var(--p2); background: var(--p2-soft); border-color: color-mix(in srgb, var(--p2) 35%, transparent); }
+  .sev-P3 { color: var(--p3); background: var(--p3-soft); border-color: color-mix(in srgb, var(--p3) 35%, transparent); }
+  .b-artex { color: var(--violet); background: var(--violet-soft); border-color: color-mix(in srgb, var(--violet) 40%, transparent); }
+  .b-ok { color: var(--ok); background: var(--ok-soft); }
+  .b-warn { color: var(--p2); background: var(--p2-soft); }
+  .b-bad { color: var(--p1); background: var(--p1-soft); }
+  .b-mute { color: var(--fg2); background: var(--panel2); border-color: var(--line); }
+  .b-info { color: var(--accent); background: var(--accent-soft); }
+  .btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line2); background: var(--panel2); border-radius: 8px; padding: 6px 12px; font-weight: 550; font-size: 13px; }
+  .btn:hover { border-color: var(--fg2); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #04141a; }
+  .btn.ok { background: var(--ok); border-color: var(--ok); color: #04140d; }
+  .btn.danger { color: var(--p1); border-color: color-mix(in srgb, var(--p1) 45%, transparent); background: transparent; }
+  .btn.ghost { background: transparent; }
+  .btn.sm { padding: 4px 9px; font-size: 12px; }
+  .btn:focus-visible, nav button:focus-visible, .chip:focus-visible, tr.click:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .empty { color: var(--muted); padding: 26px 16px; text-align: center; }
+
+  /* tableaux */
+  .tbl-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; color: var(--muted); font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .6px; padding: 10px 16px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 12px 16px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  tr:last-child td { border-bottom: 0; }
+  tr.click { cursor: pointer; }
+  tr.click:hover td { background: var(--panel2); }
+  .ip { font-weight: 600; }
+  .muted { color: var(--muted); }
+  .fg2 { color: var(--fg2); }
+  .nowrap { white-space: nowrap; }
+  .trunc { max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* barre de score et chaîne d'attaque */
+  .score { display: flex; align-items: center; gap: 8px; min-width: 120px; }
+  .score .bar { flex: 1; height: 6px; background: var(--panel2); border-radius: 4px; overflow: hidden; border: 1px solid var(--line); }
+  .score .bar i { display: block; height: 100%; border-radius: 4px; }
+  .chain { display: flex; gap: 4px; }
+  .chain span { flex: 1; height: 6px; border-radius: 3px; background: var(--panel2); border: 1px solid var(--line); }
+  .chain span.on { border-color: transparent; }
+  .chain-lbl { font-size: 11.5px; color: var(--fg2); margin-top: 4px; }
+  .killchain { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .kc { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 12px; position: relative; }
+  .kc .n { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .kc .t { color: var(--fg2); font-size: 12.5px; }
+  .kc .step { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .7px; }
+  .kc::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: 0; height: 3px; border-radius: 3px 3px 0 0; background: var(--kcc); opacity: .9; }
+  .distrib { display: flex; height: 10px; border-radius: 6px; overflow: hidden; background: var(--panel2); border: 1px solid var(--line); }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; font-size: 12.5px; color: var(--fg2); }
+  .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; }
+
+  /* approbations */
+  .approval { display: flex; gap: 14px; align-items: flex-start; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .approval:last-child { border-bottom: 0; }
+  .approval .ico { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--p2-soft); color: var(--p2); flex: none; }
+  .approval .ico svg { width: 18px; height: 18px; }
+  .approval .body { flex: 1; min-width: 0; }
+  .approval .title { font-weight: 600; }
+  .approval .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* filtres */
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .chip { border: 1px solid var(--line2); background: transparent; border-radius: 999px; padding: 4px 12px; font-size: 12.5px; color: var(--fg2); }
+  .chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  .search { margin-left: auto; display: flex; align-items: center; gap: 6px; background: var(--panel2); border: 1px solid var(--line2); border-radius: 8px; padding: 5px 10px; min-width: 220px; }
+  .search input { background: none; border: 0; outline: none; width: 100%; }
+
+  /* tiroir de détail */
+  .scrim { position: fixed; inset: 0; background: rgba(3, 6, 10, .55); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 30; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(640px, 100%); background: var(--bg2); border-left: 1px solid var(--line); box-shadow: var(--shadow); transform: translateX(100%); transition: transform .22s ease; z-index: 31; display: flex; flex-direction: column; }
+  .open .scrim { opacity: 1; pointer-events: auto; }
+  .open .drawer { transform: none; }
+  .drawer-h { padding: 18px 20px; border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: flex-start; }
+  .drawer-h h3 { margin: 4px 0 0; font-size: 20px; }
+  .drawer-b { padding: 18px 20px 32px; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; }
+  .sec-t { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .7px; margin-bottom: 8px; font-weight: 600; }
+  .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .fact { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .fact .k { color: var(--muted); font-size: 11.5px; }
+  .fact .v { font-weight: 600; margin-top: 2px; overflow-wrap: anywhere; }
+  .ind { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px dashed var(--line); }
+  .ind:last-child { border-bottom: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .timeline { position: relative; padding-left: 18px; }
+  .timeline::before { content: ""; position: absolute; left: 5px; top: 4px; bottom: 4px; width: 2px; background: var(--line); }
+  .tl { position: relative; padding: 0 0 14px; }
+  .tl::before { content: ""; position: absolute; left: -17px; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--tlc, var(--muted)); border: 2px solid var(--bg2); }
+  .cmd { display: block; margin-top: 6px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; word-break: break-all; color: var(--fg2); }
+  .sample { display: block; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; word-break: break-all; color: var(--fg2); margin-bottom: 6px; }
+
+  /* connexion */
+  .login { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px;
+           background: radial-gradient(1200px 600px at 20% 10%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 60%), var(--bg); }
+  .login .card { width: min(400px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 28px; box-shadow: var(--shadow); }
+  .login h2 { margin: 14px 0 4px; font-size: 20px; }
+  .login p { color: var(--fg2); margin: 0 0 18px; font-size: 13.5px; }
+  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+  .field label { font-size: 12.5px; color: var(--fg2); font-weight: 550; }
+  .field input { background: var(--panel2); border: 1px solid var(--line2); border-radius: 8px; padding: 9px 12px; outline: none; }
+  .field input:focus { border-color: var(--accent); }
+  .login .btn { width: 100%; justify-content: center; padding: 10px; }
+  .hidden { display: none !important; }
+
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line2); border-radius: 10px; padding: 10px 16px; box-shadow: var(--shadow); z-index: 60; font-size: 13.5px; max-width: calc(100% - 32px); }
+  .toast.err { border-color: var(--p1); color: var(--p1); }
+
+  /* ---------- mobile ---------- */
+  @media (max-width: 1100px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .two { grid-template-columns: 1fr; } }
+  @media (max-width: 760px) {
+    .app { grid-template-columns: minmax(0, 1fr); }
+    aside { min-width: 0; position: static; height: auto; padding: 12px 16px; gap: 10px; border-right: 0; border-bottom: 1px solid var(--line); }
+    nav { flex-direction: row; overflow-x: auto; }
+    nav button { white-space: nowrap; }
+    .side-block { display: none; }
+    .side-foot { margin: 0; }
+    main { padding: 16px 16px 40px; }
+    .killchain { grid-template-columns: repeat(2, 1fr); }
+    .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .search { margin-left: 0; min-width: 0; width: 100%; }
+    .approval { flex-wrap: wrap; }
+    th, td { padding: 10px 12px; }
+    .hide-sm { display: none; }
+  }
 </style>
 </head>
 <body>
-<header>
-  <h1>ARTEX SOAR</h1>
-  <span id="mode" class="badge"></span>
-  <input id="key" type="password" placeholder="Cle API" aria-label="Cle API">
-  <input id="user" placeholder="Votre nom (audit)" aria-label="Utilisateur">
-  <button id="save">Connexion</button>
-  <span id="err" class="P1"></span>
-</header>
-<main>
-  <h2>Actions en attente d'approbation</h2>
-  <div class="wrap"><table><thead><tr><th>Action</th><th>Type</th><th>Incident</th><th>Parametres</th><th>Motif</th><th></th></tr></thead><tbody id="pending"></tbody></table></div>
-  <h2>Incidents</h2>
-  <div class="wrap"><table><thead><tr><th>Gravite</th><th>Source / hote</th><th>Score</th><th>Etape</th><th>Statut</th><th>Indicateurs</th><th>Derniere activite</th><th></th></tr></thead><tbody id="incidents"></tbody></table></div>
-  <h2>Dernieres actions</h2>
-  <div class="wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Connecteur</th><th>Statut</th><th>Detail</th></tr></thead><tbody id="actions"></tbody></table></div>
-</main>
+
+<!-- Connexion -->
+<div class="login" id="login">
+  <form class="card" id="loginForm">
+    <div class="brand"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="var(--accent)" d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5z"/><path fill="none" stroke="#04141a" stroke-width="2" d="m8.5 12 2.5 2.5 4.5-5"/></svg><div><b>ARTEX SOAR</b><small>Centre de réponse défensif</small></div></div>
+    <h2>Connexion</h2>
+    <p>Saisissez la clé <code>SOAR_API_KEY</code> de votre fichier <code>.env</code>.</p>
+    <div class="field"><label for="key">Clé API</label><input id="key" type="password" autocomplete="current-password" required></div>
+    <div class="field"><label for="user">Votre nom (journal d'audit)</label><input id="user" placeholder="ex. jack" autocomplete="username"></div>
+    <button class="btn primary" type="submit">Se connecter</button>
+    <p class="muted" id="loginErr" style="margin:12px 0 0;color:var(--p1)"></p>
+  </form>
+</div>
+
+<div class="app" id="app">
+  <aside>
+    <div class="brand"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="var(--accent)" d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5z"/><path fill="none" stroke="#04141a" stroke-width="2" d="m8.5 12 2.5 2.5 4.5-5"/></svg><div><b>ARTEX SOAR</b><small>Centre de réponse défensif</small></div></div>
+    <nav id="nav">
+      <button data-view="overview" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Vue d'ensemble</button>
+      <button data-view="incidents"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>Incidents<span class="count hidden" id="navInc"></span></button>
+      <button data-view="approvals"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Approbations<span class="count hidden" id="navApp"></span></button>
+      <button data-view="actions"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg>Actions</button>
+      <button data-view="audit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>Audit</button>
+    </nav>
+    <div class="side-block">
+      <div class="side-title">Mode</div>
+      <div style="padding:0 6px" id="modeBox"></div>
+    </div>
+    <div class="side-block">
+      <div class="side-title">Connecteurs</div>
+      <div id="connList"></div>
+    </div>
+    <div class="side-foot">
+      <button class="btn ghost sm" id="themeBtn" title="Changer de thème">Thème clair</button>
+      <button class="btn ghost sm" id="logoutBtn">Déconnexion</button>
+    </div>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <div><h1 id="viewTitle">Vue d'ensemble</h1><div class="sub" id="viewSub">Situation des campagnes ARTEX détectées</div></div>
+      <div class="grow"></div>
+      <span class="live"><span class="dot" id="liveDot"></span><span id="liveTxt">Connexion…</span></span>
+      <button class="btn sm" id="refreshBtn">Actualiser</button>
+    </div>
+
+    <!-- Vue d'ensemble -->
+    <section data-section="overview">
+      <div class="grid kpis" id="kpis"></div>
+      <div class="grid two" style="margin-top:16px">
+        <div class="panel">
+          <div class="panel-h"><h2>Progression des attaques</h2><span class="hint">incidents ouverts par étape atteinte</span></div>
+          <div class="panel-b"><div class="killchain" id="killchain"></div>
+            <div style="margin-top:18px" class="sec-t">Répartition par gravité</div>
+            <div class="distrib" id="distrib"></div><div class="legend" id="legend"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-h"><h2>À traiter</h2><span class="hint" id="pendHint"></span></div>
+          <div id="pendingOverview"></div>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:16px">
+        <div class="panel-h"><h2>Incidents récents</h2><div class="grow"></div><button class="btn sm ghost" data-goto="incidents">Tout voir</button></div>
+        <div class="tbl-wrap"><table><thead><tr><th>Gravité</th><th>Source</th><th class="hide-sm">Cible</th><th>Score</th><th class="hide-sm">Étape</th><th>Statut</th><th class="hide-sm">Dernière activité</th></tr></thead><tbody id="recent"></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- Incidents -->
+    <section data-section="incidents" class="hidden">
+      <div class="panel">
+        <div class="filters" id="incFilters">
+          <button class="chip on" data-f="open">Actifs</button>
+          <button class="chip" data-f="all">Tous</button>
+          <button class="chip" data-f="P1">P1</button>
+          <button class="chip" data-f="P2">P2</button>
+          <button class="chip" data-f="P3">P3</button>
+          <button class="chip" data-f="artex">ARTEX confirmé</button>
+          <button class="chip" data-f="closed">Clos / faux positifs</button>
+          <label class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input id="incSearch" placeholder="IP, serveur, indicateur…" aria-label="Rechercher"></label>
+        </div>
+        <div class="tbl-wrap"><table><thead><tr><th>Gravité</th><th>Source</th><th class="hide-sm">Cible</th><th>Score</th><th class="hide-sm">Étape</th><th class="hide-sm">Indicateurs</th><th>Statut</th><th class="hide-sm">Dernière activité</th></tr></thead><tbody id="incTable"></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- Approbations -->
+    <section data-section="approvals" class="hidden">
+      <div class="panel"><div class="panel-h"><h2>Actions en attente de votre décision</h2><span class="hint">même approuvée, une action reste simulée tant que le mode est « dry-run »</span></div><div id="pendingFull"></div></div>
+    </section>
+
+    <!-- Actions -->
+    <section data-section="actions" class="hidden">
+      <div class="panel">
+        <div class="filters" id="actFilters">
+          <button class="chip on" data-f="all">Toutes</button>
+          <button class="chip" data-f="dry_run">Simulées</button>
+          <button class="chip" data-f="done">Exécutées</button>
+          <button class="chip" data-f="pending_approval">En attente</button>
+          <button class="chip" data-f="blocked_by_guard">Refusées</button>
+          <button class="chip" data-f="failed">Échecs</button>
+        </div>
+        <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Action</th><th class="hide-sm">Connecteur</th><th>Statut</th><th>Détail</th></tr></thead><tbody id="actTable"></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- Audit -->
+    <section data-section="audit" class="hidden">
+      <div class="panel"><div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Acteur</th><th>Événement</th><th>Détail</th></tr></thead><tbody id="auditTable"></tbody></table></div></div>
+    </section>
+  </main>
+</div>
+
+<!-- Détail d'un incident -->
+<div id="drawerRoot">
+  <div class="scrim" id="scrim"></div>
+  <div class="drawer" role="dialog" aria-modal="true" aria-labelledby="dTitle">
+    <div class="drawer-h">
+      <div class="grow"><div id="dBadges" class="chips"></div><h3 id="dTitle" class="mono"></h3><div class="muted" id="dSub"></div></div>
+      <button class="btn sm ghost" id="dClose" aria-label="Fermer">Fermer</button>
+    </div>
+    <div class="drawer-b" id="dBody"></div>
+  </div>
+</div>
+
+<div class="toast hidden" id="toast" role="status"></div>
+
 <script>
-const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const dt = (t) => t ? new Date(t * 1000).toLocaleString() : "";
-function creds() { try { return [sessionStorage.getItem("soar_key") || "", sessionStorage.getItem("soar_user") || ""]; } catch { return ["", ""]; } }
-async function api(path, opts = {}) {
-  const [k, u] = creds();
-  const r = await fetch(path, { ...opts, headers: { "X-API-Key": k, "X-SOAR-User": u || "dashboard", "Content-Type": "application/json" } });
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.status);
-  return r.json();
-}
-async function act(id, verb) { try { await api(`/api/v1/actions/${id}/${verb}`, { method: "POST", body: "{}" }); refresh(); } catch (e) { $("err").textContent = e.message; } }
-async function setStatus(id, s) { try { await api(`/api/v1/incidents/${id}/status`, { method: "POST", body: JSON.stringify({ status: s }) }); refresh(); } catch (e) { $("err").textContent = e.message; } }
-async function refresh() {
-  $("err").textContent = "";
-  try {
-    const h = await (await fetch("/health")).json();
-    $("mode").textContent = h.mode === "enforce" ? "MODE ENFORCE" : "MODE DRY-RUN";
-    $("mode").className = "badge " + (h.mode === "enforce" ? "P1" : "ok");
-    const [pend, incs, acts] = await Promise.all([api("/api/v1/actions?status=pending_approval"), api("/api/v1/incidents?limit=100"), api("/api/v1/actions")]);
-    $("pending").innerHTML = pend.map(a => `<tr><td><code>${esc(a.id)}</code></td><td>${esc(a.type)}</td><td><code>${esc(a.incident_id)}</code></td><td><code>${esc(JSON.stringify(a.params))}</code></td><td class="muted">${esc(a.result?.detail)}</td>
-      <td><button class="primary" onclick="act('${esc(a.id)}','approve')">Approuver</button> <button onclick="act('${esc(a.id)}','reject')">Rejeter</button></td></tr>`).join("") || `<tr><td colspan="6" class="muted">Aucune</td></tr>`;
-    $("incidents").innerHTML = incs.map(i => `<tr><td><span class="badge ${esc(i.severity)}">${esc(i.severity)}</span>${i.artex_confirmed ? ' <span class="badge P1">ARTEX</span>' : ""}</td>
-      <td><code>${esc(i.source_ip || i.key)}</code><div class="muted">${esc((i.targets || []).join(", "))}</div></td><td>${esc(i.score)}</td><td>${esc(i.stage)}</td><td>${esc(i.status)}</td>
-      <td class="muted">${esc(Object.keys(i.indicators || {}).slice(0, 5).join(" ; "))}</td><td>${dt(i.last_seen)}</td>
-      <td><button onclick="setStatus('${esc(i.id)}','closed')">Clore</button> <button onclick="setStatus('${esc(i.id)}','false_positive')">Faux positif</button></td></tr>`).join("") || `<tr><td colspan="8" class="muted">Aucun incident</td></tr>`;
-    $("actions").innerHTML = acts.slice(0, 50).map(a => `<tr><td>${dt(a.executed || a.created)}</td><td>${esc(a.type)}</td><td>${esc(a.connector)}</td><td>${esc(a.status)}</td><td class="muted"><code>${esc(a.result?.detail)}${a.result?.commands?.length ? " : " + esc(a.result.commands.map(c => c.join(" ")).join(" | ")) : ""}</code></td></tr>`).join("");
-  } catch (e) { $("err").textContent = "Erreur : " + e.message; }
-}
-$("save").onclick = () => { try { sessionStorage.setItem("soar_key", $("key").value); sessionStorage.setItem("soar_user", $("user").value); } catch {} refresh(); };
-refresh(); setInterval(refresh, 10000);
+(() => {
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const store = {
+    get(k) { try { return sessionStorage.getItem(k) || ""; } catch { return ""; } },
+    set(k, v) { try { sessionStorage.setItem(k, v); } catch {} },
+    del(k) { try { sessionStorage.removeItem(k); } catch {} },
+    pref(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } },
+  };
+
+  const STAGES = [["recon", "Reconnaissance"], ["exploitation", "Exploitation"], ["credential_access", "Identifiants"], ["execution", "Exécution"]];
+  const STAGE_LBL = Object.fromEntries(STAGES);
+  const STAGE_COL = { recon: "var(--p3)", exploitation: "var(--p2)", credential_access: "var(--violet)", execution: "var(--p1)" };
+  const TYPE = { block_ip: "Blocage d'IP", isolate_host: "Isolation de serveur", collect_evidence: "Collecte de preuves", open_ticket: "Ticket", notify: "Notification" };
+  const ACT_ST = {
+    dry_run: ["Simulée", "b-info"], done: ["Exécutée", "b-ok"], failed: ["Échec", "b-bad"],
+    pending_approval: ["En attente", "b-warn"], rejected: ["Rejetée", "b-mute"], blocked_by_guard: ["Refusée par garde-fou", "b-mute"], new: ["Nouvelle", "b-mute"],
+  };
+  const INC_ST = { open: ["Ouvert", "b-warn"], authorized: ["Pentest autorisé", "b-info"], closed: ["Clos", "b-mute"], false_positive: ["Faux positif", "b-mute"] };
+  const SEV_COL = { P1: "var(--p1)", P2: "var(--p2)", P3: "var(--p3)" };
+  const VIEWS = {
+    overview: ["Vue d'ensemble", "Situation des campagnes ARTEX détectées"],
+    incidents: ["Incidents", "Un incident par source d'attaque, qualifié P3 → P1"],
+    approvals: ["Approbations", "Actions sensibles qui attendent une décision humaine"],
+    actions: ["Actions", "Tout ce que la plateforme a fait ou aurait fait"],
+    audit: ["Journal d'audit", "Chaque décision du moteur, des garde-fous et des analystes"],
+  };
+
+  const S = { health: null, incidents: [], actions: [], audit: [], view: "overview", incF: "open", actF: "all", q: "", openId: null };
+
+  const fmt = (t) => t ? new Date(t * 1000).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
+  const ago = (t) => {
+    if (!t) return "";
+    const d = Math.max(0, Date.now() / 1000 - t);
+    if (d < 60) return "à l'instant"; if (d < 3600) return `il y a ${Math.floor(d / 60)} min`;
+    if (d < 86400) return `il y a ${Math.floor(d / 3600)} h`; return fmt(t);
+  };
+  const sev = (s) => `<span class="badge sev-${esc(s)}">${esc(s)}</span>`;
+  const artex = (i) => i.artex_confirmed ? ` <span class="badge b-artex">ARTEX</span>` : "";
+  const pill = (map, k) => { const [l, c] = map[k] || [k, "b-mute"]; return `<span class="badge ${c}">${esc(l)}</span>`; };
+  const who = (i) => i.source_ip || (i.key || "").replace(/^host:/, "");
+  const scoreBar = (s) => { const p = Math.min(100, Math.round(s / 4)); const c = s >= 100 ? "var(--p1)" : s >= 60 ? "var(--p2)" : "var(--p3)";
+    return `<div class="score"><span class="mono">${esc(s)}</span><span class="bar"><i style="width:${p}%;background:${c}"></i></span></div>`; };
+  const chain = (st) => { const idx = STAGES.findIndex(([k]) => k === st);
+    return `<div class="chain" aria-label="${esc(STAGE_LBL[st] || st)}">${STAGES.map(([k], i) => `<span class="${i <= idx ? "on" : ""}" style="${i <= idx ? `background:${STAGE_COL[st]}` : ""}"></span>`).join("")}</div><div class="chain-lbl">${esc(STAGE_LBL[st] || st)}</div>`; };
+  const active = (i) => i.status === "open" || i.status === "authorized";
+
+  function toast(msg, err = false) {
+    const t = $("#toast"); t.textContent = msg; t.className = "toast" + (err ? " err" : "");
+    clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.add("hidden"), 3500);
+  }
+
+  async function api(path, opts = {}) {
+    const r = await fetch(path, { ...opts, headers: { "X-API-Key": store.get("soar_key"), "X-SOAR-User": store.get("soar_user") || "dashboard", "Content-Type": "application/json" } });
+    if (r.status === 401) { showLogin("Clé API refusée."); throw new Error("Clé API refusée"); }
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `HTTP ${r.status}`);
+    return r.json();
+  }
+
+  // ---------- rendu ----------
+  function renderSide() {
+    const h = S.health; if (!h) return;
+    $("#modeBox").innerHTML = h.mode === "enforce"
+      ? `<span class="badge b-bad">ENFORCE · actions réelles</span>`
+      : `<span class="badge b-ok">DRY-RUN · simulation</span>`;
+    $("#connList").innerHTML = Object.entries(h.connectors).map(([n, c]) =>
+      `<div class="conn"><span class="mono">${esc(n)}</span>${c.dry_run ? `<span class="badge b-info">simulé</span>` : `<span class="badge b-ok">actif</span>`}</div>`).join("");
+    const pend = S.actions.filter(a => a.status === "pending_approval").length;
+    const openN = S.incidents.filter(i => i.status === "open").length;
+    $("#navApp").textContent = pend; $("#navApp").classList.toggle("hidden", !pend);
+    $("#navInc").textContent = openN; $("#navInc").classList.toggle("hidden", !openN);
+    $("#navInc").style.background = S.incidents.some(i => i.status === "open" && i.severity === "P1") ? "var(--p1)" : "var(--p2)";
+  }
+
+  function renderOverview() {
+    const act = S.incidents.filter(active);
+    const p1 = act.filter(i => i.severity === "P1").length;
+    const pend = S.actions.filter(a => a.status === "pending_approval");
+    const blocked = new Set(S.actions.filter(a => a.type === "block_ip" && (a.status === "done" || a.status === "dry_run")).map(a => a.result?.data?.ip).filter(Boolean));
+    const real = S.actions.some(a => a.type === "block_ip" && a.status === "done");
+    const artexN = act.filter(i => i.artex_confirmed).length;
+    const k = [
+      ["Incidents actifs", act.length, `${artexN} avec ARTEX confirmé`, "var(--accent)"],
+      ["Critiques (P1)", p1, p1 ? "compromission probable" : "aucune compromission", "var(--p1)"],
+      ["En attente", pend.length, pend.length ? "décision requise" : "rien à approuver", "var(--p2)"],
+      [real ? "IP bloquées" : "IP à bloquer", blocked.size, real ? "sur le pare-feu / WAF" : "simulées (dry-run)", "var(--ok)"],
+    ];
+    $("#kpis").innerHTML = k.map(([l, v, n, c]) => `<div class="panel kpi" style="--kc:${c}"><div class="label">${l}</div><div class="value" style="color:${c}">${v}</div><div class="note">${n}</div></div>`).join("");
+
+    $("#killchain").innerHTML = STAGES.map(([key, lbl], i) => {
+      const n = act.filter(x => x.stage === key).length;
+      return `<div class="kc" style="--kcc:${STAGE_COL[key]}"><div class="step">Étape ${i + 1}</div><div class="n">${n}</div><div class="t">${lbl}</div></div>`;
+    }).join("");
+    const tot = act.length || 1;
+    const counts = ["P1", "P2", "P3"].map(s => [s, act.filter(i => i.severity === s).length]);
+    $("#distrib").innerHTML = act.length ? counts.map(([s, n]) => n ? `<span title="${s} : ${n}" style="width:${n / tot * 100}%;background:${SEV_COL[s]}"></span>` : "").join("") : "";
+    $("#legend").innerHTML = counts.map(([s, n]) => `<span><i style="background:${SEV_COL[s]}"></i>${s} · ${n}</span>`).join("");
+
+    $("#pendHint").textContent = pend.length ? `${pend.length} action(s)` : "";
+    $("#pendingOverview").innerHTML = pend.length ? pend.slice(0, 4).map(approvalCard).join("") : `<div class="empty">Aucune action en attente.<br><span class="muted">Les isolations de serveur apparaîtront ici.</span></div>`;
+
+    const recent = [...S.incidents].sort((a, b) => b.last_seen - a.last_seen).slice(0, 6);
+    $("#recent").innerHTML = recent.length ? recent.map(i => incRow(i)).join("") : `<tr><td colspan="7" class="empty">Aucun incident pour l'instant. Envoyez un journal pour commencer (voir le README).</td></tr>`;
+  }
+
+  function incRow(i, full = false) {
+    const inds = Object.keys(i.indicators || {});
+    return `<tr class="click" tabindex="0" data-inc="${esc(i.id)}">
+      <td class="nowrap">${sev(i.severity)}${artex(i)}</td>
+      <td><div class="mono ip">${esc(who(i))}</div><div class="muted" style="font-size:12px">${i.kind === "host" ? "IOC sur serveur" : esc(i.events) + " événements"}</div></td>
+      <td class="hide-sm fg2">${esc((i.targets || []).join(", ") || "—")}</td>
+      <td>${scoreBar(i.score)}</td>
+      <td class="hide-sm" style="min-width:130px">${chain(i.stage)}</td>
+      ${full ? `<td class="hide-sm"><div class="trunc fg2" title="${esc(inds.join(" ; "))}">${esc(inds.slice(0, 3).join(" · "))}${inds.length > 3 ? ` <span class="muted">+${inds.length - 3}</span>` : ""}</div></td>` : ""}
+      <td>${pill(INC_ST, i.status)}</td>
+      <td class="hide-sm muted nowrap" title="${esc(fmt(i.last_seen))}">${esc(ago(i.last_seen))}</td></tr>`;
+  }
+
+  function filteredIncidents() {
+    const q = S.q.trim().toLowerCase();
+    return [...S.incidents].sort((a, b) => b.last_seen - a.last_seen).filter(i => {
+      const f = S.incF;
+      if (f === "open" && !active(i)) return false;
+      if (f === "closed" && active(i)) return false;
+      if (["P1", "P2", "P3"].includes(f) && (i.severity !== f || !active(i))) return false;
+      if (f === "artex" && !i.artex_confirmed) return false;
+      if (!q) return true;
+      return [who(i), i.id, ...(i.targets || []), ...Object.keys(i.indicators || {}), ...(i.techniques || [])].join(" ").toLowerCase().includes(q);
+    });
+  }
+
+  function renderIncidents() {
+    const rows = filteredIncidents();
+    $("#incTable").innerHTML = rows.length ? rows.map(i => incRow(i, true)).join("") : `<tr><td colspan="8" class="empty">Aucun incident ne correspond.</td></tr>`;
+  }
+
+  function approvalCard(a) {
+    const inc = S.incidents.find(i => i.id === a.incident_id);
+    const what = a.type === "isolate_host" ? `Isoler le serveur <span class="mono">${esc(a.params?.host || "?")}</span>`
+      : a.type === "block_ip" ? `Bloquer <span class="mono">${esc(inc?.source_ip || "?")}</span>` : esc(TYPE[a.type] || a.type);
+    return `<div class="approval">
+      <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+      <div class="body"><div class="title">${what}</div>
+        <div class="muted" style="font-size:12.5px">${inc ? `${sev(inc.severity)}${artex(inc)} incident <a href="#" data-open="${esc(inc.id)}">${esc(inc.id)}</a> · source <span class="mono">${esc(who(inc))}</span>` : esc(a.incident_id)}</div>
+        <div class="fg2" style="font-size:12.5px;margin-top:4px">${esc(a.result?.detail || "")} · playbook <span class="mono">${esc(a.playbook)}</span></div></div>
+      <div class="actions"><button class="btn ok sm" data-approve="${esc(a.id)}">Approuver</button><button class="btn danger sm" data-reject="${esc(a.id)}">Rejeter</button></div></div>`;
+  }
+
+  function renderApprovals() {
+    const pend = S.actions.filter(a => a.status === "pending_approval");
+    $("#pendingFull").innerHTML = pend.length ? pend.map(approvalCard).join("") : `<div class="empty">Aucune action en attente de décision.</div>`;
+  }
+
+  const detail = (a) => {
+    const cmds = a.result?.commands || [];
+    return `${esc(a.result?.detail || "")}${cmds.length ? `<code class="cmd">${cmds.map(c => "$ " + c.map(esc).join(" ")).join("\n")}</code>` : ""}`;
+  };
+
+  function renderActions() {
+    const rows = S.actions.filter(a => S.actF === "all" || a.status === S.actF);
+    $("#actTable").innerHTML = rows.length ? rows.slice(0, 300).map(a => `<tr>
+      <td class="muted nowrap">${esc(fmt(a.executed || a.created))}</td>
+      <td class="nowrap"><div style="font-weight:600">${esc(TYPE[a.type] || a.type)}</div><a href="#" class="mono" style="font-size:12px" data-open="${esc(a.incident_id)}">${esc(a.incident_id)}</a></td>
+      <td class="hide-sm mono fg2">${esc(a.connector)}</td>
+      <td>${pill(ACT_ST, a.status)}</td>
+      <td class="fg2" style="min-width:260px">${detail(a)}</td></tr>`).join("") : `<tr><td colspan="5" class="empty">Aucune action.</td></tr>`;
+  }
+
+  function renderAudit() {
+    $("#auditTable").innerHTML = S.audit.length ? S.audit.map(e => `<tr>
+      <td class="muted nowrap">${esc(fmt(e.ts))}</td><td class="mono">${esc(e.actor)}</td><td>${esc(e.event)}</td>
+      <td class="fg2"><code>${esc(JSON.stringify(e.data))}</code></td></tr>`).join("") : `<tr><td colspan="4" class="empty">Journal vide.</td></tr>`;
+  }
+
+  async function openIncident(id) {
+    S.openId = id;
+    let inc;
+    try { inc = await api(`/api/v1/incidents/${encodeURIComponent(id)}`); } catch (e) { return toast(e.message, true); }
+    const acts = (inc.actions || []).sort((a, b) => (a.executed || a.created) - (b.executed || b.created));
+    $("#dBadges").innerHTML = `${sev(inc.severity)}${artex(inc)} ${pill(INC_ST, inc.status)}`;
+    $("#dTitle").textContent = who(inc);
+    $("#dSub").textContent = `${inc.id} · ${inc.kind === "host" ? "IOC sur serveur" : "source d'attaque"} · du ${fmt(inc.first_seen)} au ${fmt(inc.last_seen)}`;
+    const inds = Object.entries(inc.indicators || {}).sort((a, b) => b[1] - a[1]);
+    const succ = new Set(inc.successful || []);
+    const tlColor = { done: "var(--ok)", dry_run: "var(--accent)", failed: "var(--p1)", pending_approval: "var(--p2)" };
+    $("#dBody").innerHTML = `
+      <div class="facts">
+        <div class="fact"><div class="k">Score</div><div class="v">${scoreBar(inc.score)}</div></div>
+        <div class="fact"><div class="k">Étape atteinte</div><div class="v">${chain(inc.stage)}</div></div>
+        <div class="fact"><div class="k">Événements</div><div class="v">${esc(inc.events)}</div></div>
+        <div class="fact"><div class="k">Serveurs ciblés</div><div class="v mono">${esc((inc.targets || []).join(", ") || "—")}</div></div>
+        <div class="fact"><div class="k">Engagement</div><div class="v mono">${esc(inc.engagement || "—")}</div></div>
+        <div class="fact"><div class="k">ATT&amp;CK</div><div class="v chips">${(inc.techniques || []).map(t => `<span class="badge b-mute mono">${esc(t)}</span>`).join("") || "—"}</div></div>
+      </div>
+      <div><div class="sec-t">Indicateurs</div><div class="panel" style="padding:4px 14px">${inds.map(([l, n]) => `<div class="ind"><span>${esc(l)}${succ.has(l) ? ` <span class="badge b-bad">abouti</span>` : ""}</span><span class="mono muted">×${esc(n)}</span></div>`).join("") || `<div class="empty">—</div>`}</div></div>
+      <div><div class="sec-t">Réponse automatisée</div>${acts.length ? `<div class="timeline">${acts.map(a => `<div class="tl" style="--tlc:${tlColor[a.status] || "var(--muted)"}">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><b>${esc(TYPE[a.type] || a.type)}</b>${pill(ACT_ST, a.status)}<span class="muted mono" style="font-size:12px">${esc(a.connector)} · ${esc(fmt(a.executed || a.created))}</span></div>
+          <div class="fg2" style="font-size:13px">${detail(a)}</div>
+          ${a.status === "pending_approval" ? `<div style="display:flex;gap:8px;margin-top:8px"><button class="btn ok sm" data-approve="${esc(a.id)}">Approuver</button><button class="btn danger sm" data-reject="${esc(a.id)}">Rejeter</button></div>` : ""}
+        </div>`).join("")}</div>` : `<div class="muted">Aucune action déclenchée.</div>`}</div>
+      ${(inc.samples || []).length ? `<div><div class="sec-t">Requêtes observées</div>${inc.samples.slice(0, 8).map(s => `<code class="sample">${esc(s)}</code>`).join("")}</div>` : ""}
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${active(inc) ? `<button class="btn" data-status="closed">Clore l'incident</button><button class="btn ghost" data-status="false_positive">Marquer faux positif</button>`
+                      : `<button class="btn" data-status="open">Rouvrir</button>`}
+      </div>`;
+    document.body.classList.add("open");
+    $("#dClose").focus();
+  }
+  function closeDrawer() { document.body.classList.remove("open"); S.openId = null; }
+
+  function renderAll() {
+    renderSide();
+    ({ overview: renderOverview, incidents: renderIncidents, approvals: renderApprovals, actions: renderActions, audit: renderAudit })[S.view]();
+  }
+
+  async function refresh() {
+    try {
+      const [h, inc, act, aud] = await Promise.all([
+        fetch("/health").then(r => r.json()), api("/api/v1/incidents?limit=500"), api("/api/v1/actions"),
+        S.view === "audit" ? api("/api/v1/audit?limit=300") : Promise.resolve(S.audit)]);
+      Object.assign(S, { health: h, incidents: inc, actions: act, audit: aud });
+      $("#liveDot").classList.remove("off"); $("#liveTxt").textContent = "Actualisé " + new Date().toLocaleTimeString("fr-FR");
+      renderAll();
+    } catch (e) {
+      $("#liveDot").classList.add("off"); $("#liveTxt").textContent = "Hors ligne";
+      if (!$("#login").classList.contains("hidden")) return;
+      toast("Erreur : " + e.message, true);
+    }
+  }
+
+  function setView(v) {
+    S.view = v;
+    $$("#nav button").forEach(b => b.classList.toggle("active", b.dataset.view === v));
+    $$("section[data-section]").forEach(s => s.classList.toggle("hidden", s.dataset.section !== v));
+    $("#viewTitle").textContent = VIEWS[v][0]; $("#viewSub").textContent = VIEWS[v][1];
+    store.pref("soar_view", v);
+    if (v === "audit") refresh(); else renderAll();
+  }
+
+  function showLogin(msg = "") {
+    $("#login").classList.remove("hidden"); $("#loginErr").textContent = msg;
+    $("#key").value = ""; $("#user").value = store.get("soar_user"); $("#key").focus();
+  }
+
+  // ---------- événements ----------
+  $("#loginForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    store.set("soar_key", $("#key").value); store.set("soar_user", $("#user").value.trim());
+    try { await api("/api/v1/actions?status=pending_approval"); $("#login").classList.add("hidden"); refresh(); }
+    catch (err) { $("#loginErr").textContent = err.message; }
+  });
+  $("#logoutBtn").onclick = () => { store.del("soar_key"); showLogin(); };
+  $("#refreshBtn").onclick = refresh;
+  $$("#nav button").forEach(b => b.onclick = () => setView(b.dataset.view));
+  $("#incFilters").addEventListener("click", e => { const c = e.target.closest(".chip"); if (!c) return;
+    S.incF = c.dataset.f; $$("#incFilters .chip").forEach(x => x.classList.toggle("on", x === c)); renderIncidents(); });
+  $("#actFilters").addEventListener("click", e => { const c = e.target.closest(".chip"); if (!c) return;
+    S.actF = c.dataset.f; $$("#actFilters .chip").forEach(x => x.classList.toggle("on", x === c)); renderActions(); });
+  $("#incSearch").addEventListener("input", e => { S.q = e.target.value; renderIncidents(); });
+  $("#scrim").onclick = closeDrawer; $("#dClose").onclick = closeDrawer;
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") closeDrawer();
+    if (e.key === "Enter" && e.target.matches("tr.click")) openIncident(e.target.dataset.inc);
+  });
+
+  async function decide(id, verb) {
+    try { const a = await api(`/api/v1/actions/${encodeURIComponent(id)}/${verb}`, { method: "POST", body: "{}" });
+      toast(verb === "approve" ? `Action approuvée : ${ACT_ST[a.status]?.[0] || a.status}` : "Action rejetée");
+      await refresh(); if (S.openId) openIncident(S.openId);
+    } catch (e) { toast(e.message, true); }
+  }
+  document.addEventListener("click", async e => {
+    const t = e.target.closest("[data-approve],[data-reject],[data-open],[data-goto],[data-status],tr[data-inc]");
+    if (!t) return;
+    if (t.dataset.approve) return decide(t.dataset.approve, "approve");
+    if (t.dataset.reject) return decide(t.dataset.reject, "reject");
+    if (t.dataset.goto) return setView(t.dataset.goto);
+    if (t.dataset.open) { e.preventDefault(); return openIncident(t.dataset.open); }
+    if (t.dataset.status) {
+      try { await api(`/api/v1/incidents/${encodeURIComponent(S.openId)}/status`, { method: "POST", body: JSON.stringify({ status: t.dataset.status }) });
+        toast("Statut mis à jour"); await refresh(); openIncident(S.openId); } catch (err) { toast(err.message, true); }
+      return;
+    }
+    if (t.dataset.inc) openIncident(t.dataset.inc);
+  });
+
+  // thème
+  function applyTheme(th) { document.documentElement.dataset.theme = th; $("#themeBtn").textContent = th === "dark" ? "Thème clair" : "Thème sombre"; }
+  applyTheme(store.pref("soar_theme") || "dark");
+  $("#themeBtn").onclick = () => { const th = document.documentElement.dataset.theme === "dark" ? "light" : "dark"; store.pref("soar_theme", th); applyTheme(th); };
+
+  // démarrage
+  const v = store.pref("soar_view"); if (v && VIEWS[v]) setView(v);
+  if (store.get("soar_key")) { $("#login").classList.add("hidden"); refresh(); } else showLogin();
+  setInterval(() => { if ($("#login").classList.contains("hidden")) refresh(); }, 10000);
+})();
 </script>
 </body>
 </html>

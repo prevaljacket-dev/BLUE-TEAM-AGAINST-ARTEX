@@ -116,3 +116,10 @@ def test_playbook_actions_fire_once(engine, sample_lines):
     n = len(engine.store.list_actions())
     engine.ingest(parse_access_log(sample_lines[:200], target="web01"))
     assert len(engine.store.list_actions()) == n
+
+
+def test_host_incident_does_not_try_to_block_an_ip(engine):
+    report = {"hote": "web01", "date": "2026-11-24T10:05:00+00:00", "webshells": [{"chemin": "/var/www/x.php"}]}
+    engine.ingest(parse_triage_host(report, now=1100))
+    types = {a["type"] for a in engine.store.list_actions()}
+    assert "block_ip" not in types and "collect_evidence" in types
