@@ -1,0 +1,59 @@
+id: 6a1e0c0d-a7e5-4b1e-9001-000000000004
+name: ARTEX php2shell - Inclusion d'un fichier de session PHP via LFI
+description: |
+  Etape finale de la chaine php2shell d'ARTEX : un parametre d'inclusion pointe vers un fichier sess_*
+  rempli au prealable via PHP_SESSION_UPLOAD_PROGRESS, ce qui execute du code sur le serveur.
+  Un code HTTP 200 indique une compromission probable (P1 du playbook) : isoler et collecter les preuves.
+  Equivalent Sigma : rules/sigma/artex_php2shell_session_lfi.yml. Suricata : SID 9100040-9100042.
+severity: High
+status: Available
+requiredDataConnectors: []
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Execution
+relevantTechniques:
+  - T1190
+  - T1059
+query: |
+  ArtexWebRequests
+  | where Target contains "sess_"
+  | where Target matches regex @"(?i)sess_[a-z0-9,-]{6,}"
+  | where Target matches regex @"(?i)(\.\./|%2e%2e|/tmp/|/var/lib/php)"
+  | where SrcIp !in (ArtexAllowlist)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Attempts = count(),
+      Http200 = countif(Status == 200), Statuses = make_set(Status), SampleUrls = make_set(Url, 10)
+      by SrcIp, Host, Computer
+  | extend Verdict = iff(Http200 > 0, "Compromission probable (HTTP 200)", "Tentative")
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIp
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+customDetails:
+  Verdict: Verdict
+  Attempts: Attempts
+  Http200: Http200
+alertDetailsOverride:
+  alertDisplayNameFormat: "php2shell sur {{Host}} depuis {{SrcIp}} : {{Verdict}}"
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: true
+    lookbackDuration: 1d
+    matchingMethod: Selected
+    groupByEntities:
+      - IP
+      - Host
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+version: 1.0.0
+kind: Scheduled

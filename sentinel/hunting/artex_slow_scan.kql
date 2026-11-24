@@ -1,0 +1,16 @@
+// Titre : ARTEX - Scan lent (profil "quiet" ~2 req/s) sur 24 h
+// Tactique : Reconnaissance (T1595)
+// En profil "quiet", ARTEX reste sous les seuils de rafale. On cherche donc, sur 24 h, une IP
+// avec beaucoup de chemins distincts, une majorite d'erreurs 4xx et un debit regulier.
+let periode = 24h;
+ArtexWebRequests
+| where TimeGenerated > ago(periode)
+| where SrcIp !in (ArtexAllowlist)
+| summarize Requests = count(), Errors4xx = countif(Status between (400 .. 499)),
+    DistinctPaths = dcount(UrlPath), ActiveMinutes = dcount(bin(TimeGenerated, 1m)),
+    StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), UserAgents = make_set(UserAgent, 5)
+    by SrcIp
+| extend ErrorRatio = round(todouble(Errors4xx) / Requests, 2),
+    AvgPerActiveMinute = round(todouble(Requests) / ActiveMinutes, 1)
+| where DistinctPaths >= 300 and ErrorRatio >= 0.6
+| order by DistinctPaths desc

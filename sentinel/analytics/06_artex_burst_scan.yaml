@@ -1,0 +1,55 @@
+id: 6a1e0c0d-a7e5-4b1e-9001-000000000006
+name: ARTEX - Rafale de requetes ou enumeration massive (ffuf, katana, nuclei)
+description: |
+  ARTEX tourne par defaut sans limitation de debit (profil de bruit "off") : rafales de requetes et
+  centaines de 404 en quelques minutes pendant l'enumeration. Detecte, par tranche de 5 minutes, une IP
+  qui depasse 500 requetes, ou 100 reponses 404 sur au moins 100 chemins differents.
+  Le profil "quiet" (~2 req/s) est couvert par la requete de chasse artex_slow_scan.kql.
+  Suricata : SID 9100060.
+severity: Medium
+status: Available
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Reconnaissance
+relevantTechniques:
+  - T1595
+query: |
+  let seuilRequetes = 500;
+  let seuil404 = 100;
+  ArtexWebRequests
+  | where SrcIp !in (ArtexAllowlist)
+  | summarize Requests = count(), NotFound = countif(Status == 404), DistinctPaths = dcount(UrlPath),
+      UserAgents = make_set(UserAgent, 5), Hosts = make_set(Host, 10)
+      by SrcIp, Window = bin(TimeGenerated, 5m)
+  | where Requests >= seuilRequetes or (NotFound >= seuil404 and DistinctPaths >= seuil404)
+  | summarize StartTime = min(Window), EndTime = max(Window) + 5m, PeakRequestsPer5m = max(Requests),
+      Total404 = sum(NotFound), MaxDistinctPaths = max(DistinctPaths),
+      SampleUserAgents = take_any(UserAgents), SampleHosts = take_any(Hosts)
+      by SrcIp
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIp
+customDetails:
+  PeakRequestsPer5m: PeakRequestsPer5m
+  Total404: Total404
+alertDetailsOverride:
+  alertDisplayNameFormat: "Rafale/enumeration depuis {{SrcIp}} ({{PeakRequestsPer5m}} req/5 min)"
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: Selected
+    groupByEntities:
+      - IP
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+version: 1.0.0
+kind: Scheduled

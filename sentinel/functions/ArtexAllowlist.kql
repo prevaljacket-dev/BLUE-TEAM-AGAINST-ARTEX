@@ -1,0 +1,8 @@
+// ArtexAllowlist : IP sources autorisees (pentests annonces, scanners internes).
+// Lit la watchlist "ArtexAllowlist" (colonne SrcIp). Si la watchlist n'existe pas encore,
+// la fonction renvoie une liste vide au lieu d'echouer.
+union isfuzzy=true
+    (datatable(SrcIp:string)[]),
+    (_GetWatchlist("ArtexAllowlist") | project SrcIp = tostring(SearchKey))
+| where isnotempty(SrcIp)
+| distinct SrcIp

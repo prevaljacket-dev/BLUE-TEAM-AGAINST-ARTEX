@@ -1,0 +1,9 @@
+// Titre : ARTEX - Chronologie complete d'une IP suspecte
+// Tactique : Reconnaissance (T1595)
+// Remplacer l'IP ci-dessous. Donne la fenetre d'attaque pour le retour d'experience (playbook, section 6).
+let ip = "192.0.2.66";
+ArtexWebRequests
+| where TimeGenerated > ago(30d)
+| where SrcIp == ip
+| project TimeGenerated, LogSource, Host, Method, Url, Status, UserAgent
+| order by TimeGenerated asc

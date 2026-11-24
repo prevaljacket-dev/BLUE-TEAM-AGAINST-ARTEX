@@ -1,0 +1,146 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "name": "intro",
+      "content": {
+        "json": "## ARTEX - Vue d'ensemble\nActivite liee a ARTEX (plateforme de pentest autonome) vue dans vos logs web, DNS et EDR. Les IP de la watchlist **ArtexAllowlist** sont exclues. Playbook : `playbook/PLAYBOOK.md` du depot."
+      }
+    },
+    {
+      "type": 9,
+      "name": "params",
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "parameters": [
+          {
+            "id": "9d6d2c1e-0001-4a51-9e0b-7a1e0c0d0001",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "Periode",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 86400000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 2592000000
+                }
+              ],
+              "allowCustom": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ArtexWebRequests\n| where SrcIp !in (ArtexAllowlist)\n| extend Category = case(\n    UserAgent startswith \"ARTEX-Assessment/\", \"UA ARTEX-Assessment\",\n    Target matches regex @\"(?i)sess_[a-z0-9,-]{6,}\", \"php2shell\",\n    Target matches regex @\"(?i)(\\.\\./){3,}|/etc/passwd|php://(filter|input)|data://text/plain|expect://\", \"LFI\",\n    Target matches regex @\"(?i)union(\\s|\\+)+(all(\\s|\\+)+)?select|sleep\\(\\d+\\)|waitfor(\\s|\\+)+delay|extractvalue\\(|updatexml\\(\", \"SQLi\",\n    Target matches regex @\"(?i)<script|onerror\\s*=|javascript:alert|<svg\", \"XSS\",\n    UserAgent matches regex @\"(?i)sqlmap/|Fuzz Faster U Fool|Nmap Scripting Engine|\\(Hydra\\)|nuclei|dalfox|HeadlessChrome\", \"UA outil ARTEX\",\n    \"\")\n| where isnotempty(Category)\n| summarize Requetes = count() by Category\n| order by Requetes desc",
+        "size": 3,
+        "title": "Requetes suspectes par categorie",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "Category"
+          },
+          "leftContent": {
+            "columnMatch": "Requetes",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            }
+          },
+          "showBorder": true
+        }
+      },
+      "name": "tiles"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ArtexWebRequests\n| where SrcIp !in (ArtexAllowlist)\n| extend Category = case(\n    UserAgent startswith \"ARTEX-Assessment/\", \"UA ARTEX-Assessment\",\n    Target matches regex @\"(?i)sess_[a-z0-9,-]{6,}\", \"php2shell\",\n    Target matches regex @\"(?i)(\\.\\./){3,}|/etc/passwd|php://(filter|input)|data://text/plain|expect://\", \"LFI\",\n    Target matches regex @\"(?i)union(\\s|\\+)+(all(\\s|\\+)+)?select|sleep\\(\\d+\\)|waitfor(\\s|\\+)+delay|extractvalue\\(|updatexml\\(\", \"SQLi\",\n    Target matches regex @\"(?i)<script|onerror\\s*=|javascript:alert|<svg\", \"XSS\",\n    UserAgent matches regex @\"(?i)sqlmap/|Fuzz Faster U Fool|Nmap Scripting Engine|\\(Hydra\\)|nuclei|dalfox|HeadlessChrome\", \"UA outil ARTEX\",\n    \"\")\n| where isnotempty(Category)\n| summarize Requetes = count() by Category, bin(TimeGenerated, {TimeRange:grain})",
+        "size": 0,
+        "title": "Chronologie des requetes suspectes",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "timeline"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ArtexWebRequests\n| where SrcIp !in (ArtexAllowlist)\n| extend Category = case(\n    UserAgent startswith \"ARTEX-Assessment/\", \"UA ARTEX-Assessment\",\n    Target matches regex @\"(?i)sess_[a-z0-9,-]{6,}\", \"php2shell\",\n    Target matches regex @\"(?i)(\\.\\./){3,}|/etc/passwd|php://(filter|input)|data://text/plain|expect://\", \"LFI\",\n    Target matches regex @\"(?i)union(\\s|\\+)+(all(\\s|\\+)+)?select|sleep\\(\\d+\\)|waitfor(\\s|\\+)+delay|extractvalue\\(|updatexml\\(\", \"SQLi\",\n    Target matches regex @\"(?i)<script|onerror\\s*=|javascript:alert|<svg\", \"XSS\",\n    UserAgent matches regex @\"(?i)sqlmap/|Fuzz Faster U Fool|Nmap Scripting Engine|\\(Hydra\\)|nuclei|dalfox|HeadlessChrome\", \"UA outil ARTEX\",\n    \"\")\n| where isnotempty(Category)\n| summarize Requetes = count(), Categories = make_set(Category), Reussites200 = countif(Status == 200), Hotes = make_set(Host, 10), Debut = min(TimeGenerated), Fin = max(TimeGenerated) by SrcIp\n| order by array_length(Categories) desc, Requetes desc\n| take 50",
+        "size": 0,
+        "title": "IP sources les plus actives (cliquer une ligne pour filtrer les URL)",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "exportFieldName": "SrcIp",
+        "exportParameterName": "SelectedIp",
+        "exportDefaultValue": "*"
+      },
+      "name": "topip"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ArtexWebRequests\n| where '{SelectedIp}' == '*' or SrcIp == '{SelectedIp}'\n| where SrcIp !in (ArtexAllowlist)\n| extend Category = case(\n    UserAgent startswith \"ARTEX-Assessment/\", \"UA ARTEX-Assessment\",\n    Target matches regex @\"(?i)sess_[a-z0-9,-]{6,}\", \"php2shell\",\n    Target matches regex @\"(?i)(\\.\\./){3,}|/etc/passwd|php://(filter|input)|data://text/plain|expect://\", \"LFI\",\n    Target matches regex @\"(?i)union(\\s|\\+)+(all(\\s|\\+)+)?select|sleep\\(\\d+\\)|waitfor(\\s|\\+)+delay|extractvalue\\(|updatexml\\(\", \"SQLi\",\n    Target matches regex @\"(?i)<script|onerror\\s*=|javascript:alert|<svg\", \"XSS\",\n    UserAgent matches regex @\"(?i)sqlmap/|Fuzz Faster U Fool|Nmap Scripting Engine|\\(Hydra\\)|nuclei|dalfox|HeadlessChrome\", \"UA outil ARTEX\",\n    \"\")\n| where isnotempty(Category)\n| project TimeGenerated, SrcIp, LogSource, Host, Method, Url, Status, UserAgent, Category\n| order by TimeGenerated desc\n| take 200",
+        "size": 0,
+        "title": "Echantillon de requetes (IP selectionnee)",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "urls"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "SecurityIncident\n| where Title has \"ARTEX\" or Title has \"php2shell\" or Title has \"OAST\" or Title has \"Suricata ARTEX\"\n| summarize arg_max(LastModifiedTime, *) by IncidentNumber\n| project IncidentNumber, Title, Severity, Status, Owner = tostring(Owner.assignedTo), CreatedTime\n| order by CreatedTime desc",
+        "size": 0,
+        "title": "Incidents ARTEX",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "incidents"
+    }
+  ],
+  "fallbackResourceIds": [],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

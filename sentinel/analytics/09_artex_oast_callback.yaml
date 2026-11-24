@@ -1,0 +1,67 @@
+id: 6a1e0c0d-a7e5-4b1e-9001-000000000009
+name: ARTEX - Callback OAST (interactsh) depuis un serveur interne
+description: |
+  nuclei, utilise par ARTEX, confirme les vulnerabilites aveugles (SSRF, RCE, XXE, Log4Shell) en
+  faisant contacter par la cible un domaine *.oast.* ou *.interact.sh. Une resolution de ces domaines
+  par un de vos serveurs signifie qu'une charge a ete executee ou interpretee : vulnerabilite confirmee.
+  Sources : DnsEvents (DNS Windows), DeviceNetworkEvents (Defender), ASimDnsActivityLogs.
+  Suricata : SID 9100030-9100031.
+severity: High
+status: Available
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - CommandAndControl
+relevantTechniques:
+  - T1190
+  - T1071
+query: |
+  let oast = @"(?i)(^|\.)(oast\.(pro|live|site|online|fun|me)|interact\.sh)\.?$";
+  union isfuzzy=true
+    (datatable(TimeGenerated:datetime, ClientIp:string, HostName:string, Domain:string, LogSource:string)[]),
+    (DnsEvents
+    | where Name contains "oast." or Name contains "interact.sh"
+    | where Name matches regex oast
+    | project TimeGenerated, ClientIp = ClientIP, HostName = Computer, Domain = Name, LogSource = "DnsEvents"),
+    (DeviceNetworkEvents
+    | where RemoteUrl contains "oast." or RemoteUrl contains "interact.sh"
+    | extend Domain = tostring(split(trim_end("/", tostring(split(replace_regex(RemoteUrl, @"^[a-z]+://", ""), "/")[0])), ":")[0])
+    | where Domain matches regex oast
+    | project TimeGenerated, ClientIp = LocalIP, HostName = DeviceName, Domain, LogSource = "MDE"),
+    (ASimDnsActivityLogs
+    | where DnsQuery contains "oast." or DnsQuery contains "interact.sh"
+    | where DnsQuery matches regex oast
+    | project TimeGenerated, ClientIp = SrcIpAddr, HostName = Dvc, Domain = DnsQuery, LogSource = "ASimDns")
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Lookups = count(),
+      Domains = make_set(Domain, 20)
+      by ClientIp, HostName, LogSource
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+customDetails:
+  Lookups: Lookups
+alertDetailsOverride:
+  alertDisplayNameFormat: "Callback OAST depuis {{HostName}} ({{ClientIp}})"
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: Selected
+    groupByEntities:
+      - Host
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+version: 1.0.0
+kind: Scheduled

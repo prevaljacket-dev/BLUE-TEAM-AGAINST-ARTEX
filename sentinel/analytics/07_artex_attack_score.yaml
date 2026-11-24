@@ -1,0 +1,117 @@
+id: 6a1e0c0d-a7e5-4b1e-9001-000000000007
+name: ARTEX - Score d'attaque par IP (equivalent de artex_triage.py)
+description: |
+  Reprend le score de tools/artex_triage.py : chaque signature (UA d'outil, charge LFI/SQLi/XSS,
+  php2shell, OAST, injection de commande) compte une fois par IP avec son poids, plus des bonus
+  comportementaux (rafale, 404 massifs, rotation de User-Agents). Alerte a partir de 100 (CRITIQUE),
+  ce qui correspond a une chaine reconnaissance + exploitation typique d'ARTEX.
+  Fenetre : 6 heures, evaluee toutes les heures.
+severity: High
+status: Available
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 6h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Reconnaissance
+  - InitialAccess
+  - CredentialAccess
+  - Execution
+relevantTechniques:
+  - T1595
+  - T1190
+  - T1110
+  - T1059
+query: |
+  let seuilScore = 100;
+  let web = ArtexWebRequests
+    | where isnotempty(SrcIp)
+    | where SrcIp !in (ArtexAllowlist);
+  // Chaque signature vaut 1 si l'IP l'a touchee au moins une fois (poids compte une seule fois)
+  let hits = web
+    | extend
+        ua_artex = UserAgent matches regex @"(?i)^ARTEX-Assessment/",
+        ua_sqlmap = UserAgent matches regex @"(?i)sqlmap/",
+        ua_ffuf = UserAgent matches regex @"(?i)Fuzz Faster U Fool",
+        ua_nmap = UserAgent matches regex @"(?i)Nmap Scripting Engine",
+        ua_hydra = UserAgent matches regex @"(?i)\(Hydra\)",
+        ua_headless = UserAgent matches regex @"(?i)HeadlessChrome",
+        ua_nuclei = UserAgent matches regex @"(?i)nuclei",
+        ua_dalfox = UserAgent matches regex @"(?i)dalfox",
+        ua_pd = UserAgent matches regex @"(?i)katana|httpx|projectdiscovery",
+        ua_bbot = UserAgent matches regex @"(?i)bbot",
+        ua_script = UserAgent matches regex @"(?i)python-requests|python-urllib|aiohttp|Go-http-client|curl/|Wget/",
+        p_sess = Target matches regex @"(?i)sess_[a-z0-9,-]{6,}",
+        p_upload = Target matches regex @"(?i)PHP_SESSION_UPLOAD_PROGRESS",
+        p_lfi = Target matches regex @"(?i)(\.\./){3,}|/etc/passwd|php://(filter|input)|data://text/plain|expect://",
+        p_sqli = Target matches regex @"(?i)union(\s|\+)+all(\s|\+)+select|sleep\(\d+\)|waitfor(\s|\+)+delay|extractvalue\(|updatexml\(|'(\s|\+)*or(\s|\+)*'?1'?(\s|\+)*=(\s|\+)*'?1",
+        p_xss = Target matches regex @"(?i)<script|onerror\s*=|onload\s*=|javascript:alert|<svg",
+        p_oast = Target matches regex @"(?i)\.oast\.(pro|live|site|online|fun|me)|interact\.sh",
+        p_tpl = Target matches regex @"(?i)\$\{jndi:|\{\{\d+\*\d+\}\}|\$\{\d+\*\d+\}",
+        p_cmd = Target matches regex @"(?i);\s*(id|whoami|uname)\b|\|\s*(id|whoami)\b|`id`|\$\(id\)"
+    | summarize
+        ua_artex = max(toint(ua_artex)), ua_sqlmap = max(toint(ua_sqlmap)), ua_ffuf = max(toint(ua_ffuf)),
+        ua_nmap = max(toint(ua_nmap)), ua_hydra = max(toint(ua_hydra)), ua_headless = max(toint(ua_headless)),
+        ua_nuclei = max(toint(ua_nuclei)), ua_dalfox = max(toint(ua_dalfox)), ua_pd = max(toint(ua_pd)),
+        ua_bbot = max(toint(ua_bbot)), ua_script = max(toint(ua_script)),
+        p_sess = max(toint(p_sess)), p_upload = max(toint(p_upload)), p_lfi = max(toint(p_lfi)),
+        p_sqli = max(toint(p_sqli)), p_xss = max(toint(p_xss)), p_oast = max(toint(p_oast)),
+        p_tpl = max(toint(p_tpl)), p_cmd = max(toint(p_cmd)),
+        Requests = count(), Errors4xx = countif(Status between (400 .. 499)),
+        DistinctPaths = dcount(UrlPath), DistinctUA = dcount(UserAgent),
+        StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Hosts = make_set(Host, 20)
+        by SrcIp;
+  let peaks = web
+    | summarize c = count() by SrcIp, bin(TimeGenerated, 5m)
+    | summarize PeakRequestsPer5m = max(c) by SrcIp;
+  hits
+  | join kind=leftouter peaks on SrcIp
+  | extend SignatureScore =
+        100 * ua_artex + 60 * ua_sqlmap + 50 * ua_ffuf + 40 * ua_nmap + 60 * ua_hydra + 20 * ua_headless
+      + 50 * ua_nuclei + 50 * ua_dalfox + 40 * ua_pd + 40 * ua_bbot + 10 * ua_script
+      + 80 * p_sess + 60 * p_upload + 40 * p_lfi + 40 * p_sqli + 20 * p_xss + 50 * p_oast
+      + 30 * p_tpl + 40 * p_cmd
+  | extend BonusBurst = iff(PeakRequestsPer5m >= 500, 30, 0),
+      BonusEnum = iff(DistinctPaths >= 200 and todouble(Errors4xx) / Requests > 0.6, 30, 0),
+      BonusUA = iff(DistinctUA >= 5, 20, 0)
+  | extend Score = SignatureScore + BonusBurst + BonusEnum + BonusUA
+  | where Score >= seuilScore
+  | extend Signatures = bag_pack(
+        "ARTEX-Assessment", ua_artex, "sqlmap", ua_sqlmap, "ffuf", ua_ffuf, "nmap", ua_nmap,
+        "hydra", ua_hydra, "headless", ua_headless, "nuclei", ua_nuclei, "dalfox", ua_dalfox,
+        "projectdiscovery", ua_pd, "bbot", ua_bbot, "script", ua_script,
+        "php2shell_sess", p_sess, "upload_progress", p_upload, "lfi", p_lfi, "sqli", p_sqli,
+        "xss", p_xss, "oast", p_oast, "template_jndi", p_tpl, "cmd_injection", p_cmd,
+        "rafale", BonusBurst / 30, "enumeration", BonusEnum / 30, "rotation_ua", BonusUA / 20)
+  | mv-apply s = Signatures on (where toint(s[tostring(bag_keys(s)[0])]) == 1
+      | summarize SignatureList = make_list(tostring(bag_keys(s)[0])))
+  | extend Level = case(Score >= 100, "CRITIQUE", Score >= 60, "ELEVE", Score >= 30, "MOYEN", "FAIBLE")
+  | project SrcIp, Score, Level, Signatures = strcat_array(SignatureList, ", "), Requests, Errors4xx,
+      DistinctPaths, DistinctUA, PeakRequestsPer5m, StartTime, EndTime, Hosts
+  | order by Score desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIp
+customDetails:
+  Score: Score
+  Level: Level
+  Signatures: Signatures
+alertDetailsOverride:
+  alertDisplayNameFormat: "Chaine d'attaque type ARTEX depuis {{SrcIp}} (score {{Score}})"
+  alertDescriptionFormat: "Signatures : {{Signatures}}. Voir le playbook ARTEX, section 2 (qualification)."
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: Selected
+    groupByEntities:
+      - IP
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+version: 1.0.0
+kind: Scheduled

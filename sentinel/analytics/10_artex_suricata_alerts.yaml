@@ -1,0 +1,64 @@
+id: 6a1e0c0d-a7e5-4b1e-9001-000000000010
+name: ARTEX - Alertes Suricata du kit ARTEX (SID 9100001-9100099)
+description: |
+  Remonte dans Sentinel les alertes des regles rules/suricata/artex.rules, envoyees en Syslog
+  (fast.log / sortie syslog de Suricata) ou en CEF. Couvre ce que les logs web ne voient pas :
+  en-tetes X-ARTEX-*, corps multipart PHP_SESSION_UPLOAD_PROGRESS, acces aux ports 8787/8788.
+severity: Medium
+status: Available
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Reconnaissance
+  - InitialAccess
+relevantTechniques:
+  - T1595
+  - T1190
+query: |
+  union isfuzzy=true
+    (datatable(TimeGenerated:datetime, Sid:int, Msg:string, SrcIp:string, DstIp:string, Sensor:string)[]),
+    (Syslog
+    | where SyslogMessage contains "[1:910"
+    | extend Sid = toint(extract(@"\[1:(910\d{4}):\d+\]", 1, SyslogMessage))
+    | where Sid between (9100001 .. 9100099)
+    | project TimeGenerated, Sid,
+        Msg = trim(@"\s", extract(@"\[1:910\d{4}:\d+\]\s*(.*?)\s*\[(Classification|\*\*)", 1, SyslogMessage)),
+        SrcIp = extract(@"\}\s*([0-9a-fA-F:.]+?)(?::\d+)?\s*->", 1, SyslogMessage),
+        DstIp = extract(@"->\s*([0-9a-fA-F:.]+?)(?::\d+)?\s*$", 1, SyslogMessage),
+        Sensor = Computer),
+    (CommonSecurityLog
+    | where DeviceProduct has "Suricata" or DeviceVendor has "OISF"
+    | extend Sid = toint(extract(@"(910\d{4})", 1, DeviceEventClassID))
+    | where Sid between (9100001 .. 9100099)
+    | project TimeGenerated, Sid, Msg = Activity, SrcIp = SourceIP, DstIp = DestinationIP, Sensor = Computer)
+  | where SrcIp !in (ArtexAllowlist)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Hits = count(),
+      Sids = make_set(Sid), Messages = make_set(Msg, 10), Targets = make_set(DstIp, 20)
+      by SrcIp, Sensor
+  | extend SidCount = array_length(Sids)
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIp
+customDetails:
+  Sids: Sids
+  Hits: Hits
+alertDetailsOverride:
+  alertDisplayNameFormat: "Suricata ARTEX : {{SidCount}} regle(s) depuis {{SrcIp}}"
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: Selected
+    groupByEntities:
+      - IP
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+version: 1.0.0
+kind: Scheduled

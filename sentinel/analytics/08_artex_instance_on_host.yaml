@@ -1,0 +1,64 @@
+id: 6a1e0c0d-a7e5-4b1e-9001-000000000008
+name: ARTEX - Instance ARTEX lancee sur un hote interne
+description: |
+  Demarrage du serveur ARTEX ou de son conteneur (binaire artex, image ghcr.io/baarai/artex,
+  variables ARTEX_*). Legitime seulement pour l'equipe offensive autorisee ; sinon quelqu'un heberge
+  une plateforme de pentest autonome chez vous (playbook, section 4).
+  Sources : Defender for Endpoint (DeviceProcessEvents), evenements Windows 4688 (SecurityEvent),
+  Syslog/auditd. Equivalent Sigma : rules/sigma/artex_instance_on_host.yml.
+severity: High
+status: Available
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - ResourceDevelopment
+relevantTechniques:
+  - T1588
+query: |
+  let marqueurs = @"(?i)ghcr\.io/baarai/artex|baarai/artex|ARTEX_NOISE_PROFILE|ARTEX_PG_HOST|ARTEX_BIND_ADDR";
+  union isfuzzy=true
+    (datatable(TimeGenerated:datetime, HostName:string, AccountName:string, Image:string, CommandLine:string, LogSource:string)[]),
+    (DeviceProcessEvents
+    | where FolderPath contains "artex" or ProcessCommandLine contains "artex"
+    | where FolderPath endswith "/artex" or ProcessCommandLine matches regex marqueurs
+    | project TimeGenerated, HostName = DeviceName, AccountName, Image = FolderPath,
+        CommandLine = ProcessCommandLine, LogSource = "MDE"),
+    (SecurityEvent
+    | where EventID == 4688
+    | where NewProcessName contains "artex" or CommandLine contains "artex"
+    | where NewProcessName endswith @"\artex.exe" or CommandLine matches regex marqueurs
+    | project TimeGenerated, HostName = Computer, AccountName = SubjectUserName, Image = NewProcessName,
+        CommandLine, LogSource = "SecurityEvent 4688"),
+    (Syslog
+    | where SyslogMessage contains "artex"
+    | where SyslogMessage matches regex marqueurs or SyslogMessage matches regex @"exe=""?[^ ""]*/artex""?(\s|$)"
+    | project TimeGenerated, HostName = Computer, AccountName = "", Image = ProcessName,
+        CommandLine = SyslogMessage, LogSource = "Syslog")
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Events = count(),
+      CommandLines = make_set(CommandLine, 10), Accounts = make_set(AccountName, 10)
+      by HostName, LogSource
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+customDetails:
+  Events: Events
+alertDetailsOverride:
+  alertDisplayNameFormat: "Instance ARTEX detectee sur {{HostName}}"
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: Selected
+    groupByEntities:
+      - Host
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+version: 1.0.0
+kind: Scheduled

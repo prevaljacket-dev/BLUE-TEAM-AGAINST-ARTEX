@@ -1,0 +1,48 @@
+id: 6a1e0c0d-a7e5-4b1e-9001-000000000003
+name: ARTEX - Tentative de LFI ou de traversee de repertoire
+description: |
+  Charges LFI classiques testees par les workers ARTEX (nuclei, ffuf, tests du planner) avant la chaine
+  php2shell. Un code HTTP 200 sur ces requetes merite une verification immediate du serveur.
+  Equivalent Sigma : rules/sigma/artex_lfi_traversal.yml. Suricata : SID 9100050.
+severity: High
+status: Available
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+query: |
+  ArtexWebRequests
+  | where Target matches regex @"(?i)(\.\./){3,}|(%2e%2e(%2f|/)){3,}|(\.\.%2f){2,}|/etc/passwd|php://(filter|input)|data://text/plain|expect://"
+  | where SrcIp !in (ArtexAllowlist)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Attempts = count(),
+      Http200 = countif(Status == 200), SampleUrls = make_set(Url, 10), Hosts = make_set(Host, 20),
+      UserAgents = make_set(UserAgent, 5)
+      by SrcIp
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIp
+customDetails:
+  Attempts: Attempts
+  Http200: Http200
+alertDetailsOverride:
+  alertDisplayNameFormat: "LFI depuis {{SrcIp}} ({{Attempts}} tentatives, {{Http200}} en 200)"
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: Selected
+    groupByEntities:
+      - IP
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+version: 1.0.0
+kind: Scheduled

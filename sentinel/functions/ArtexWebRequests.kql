@@ -1,0 +1,93 @@
+// ArtexWebRequests : vue unifiee des requetes HTTP, quelle que soit la source de logs.
+// Utilisee par toutes les regles ARTEX. A enregistrer comme fonction (alias ArtexWebRequests).
+// Chaque source absente de votre espace de travail est ignoree (union isfuzzy=true).
+// Pour ajouter une source (table personnalisee nginx_CL, etc.), ajoutez une branche qui produit
+// les memes colonnes que la datatable ci-dessous.
+union isfuzzy=true
+    // Schema de reference : garantit que la fonction marche meme sans aucune source.
+    (datatable(TimeGenerated:datetime, SrcIp:string, Method:string, Host:string, UrlPath:string,
+               UrlQuery:string, UserAgent:string, Status:int, Computer:string, LogSource:string)[]),
+    // IIS (agent AMA / MMA)
+    (W3CIISLog
+    | project TimeGenerated,
+        SrcIp = cIP,
+        Method = csMethod,
+        Host = tostring(column_ifexists("csHost", "")),
+        UrlPath = csUriStem,
+        UrlQuery = iff(csUriQuery == "-", "", csUriQuery),
+        UserAgent = replace_string(csUserAgent, "+", " "),
+        Status = toint(scStatus),
+        Computer,
+        LogSource = "IIS"),
+    // Application Gateway / WAF v2 (mode AzureDiagnostics)
+    (AzureDiagnostics
+    | where Category == "ApplicationGatewayAccessLog"
+    | extend _uri = tostring(column_ifexists("requestUri_s", ""))
+    | project TimeGenerated,
+        SrcIp = tostring(column_ifexists("clientIP_s", "")),
+        Method = tostring(column_ifexists("httpMethod_s", "")),
+        Host = tostring(column_ifexists("host_s", "")),
+        UrlPath = tostring(split(_uri, "?")[0]),
+        UrlQuery = extract(@"\?(.*)$", 1, _uri),
+        UserAgent = tostring(column_ifexists("userAgent_s", "")),
+        Status = toint(column_ifexists("httpStatus_d", real(null))),
+        Computer = Resource,
+        LogSource = "AppGateway"),
+    // Application Gateway (tables specifiques a la ressource)
+    (AGWAccessLogs
+    | project TimeGenerated,
+        SrcIp = ClientIp,
+        Method = HttpMethod,
+        Host,
+        UrlPath = tostring(split(RequestUri, "?")[0]),
+        UrlQuery = coalesce(RequestQuery, extract(@"\?(.*)$", 1, RequestUri)),
+        UserAgent,
+        Status = toint(HttpStatus),
+        Computer = _ResourceId,
+        LogSource = "AppGateway"),
+    // Azure Front Door (classique / Standard / Premium, mode AzureDiagnostics)
+    (AzureDiagnostics
+    | where Category in ("FrontDoorAccessLog", "FrontdoorAccessLog")
+    | extend _uri = tostring(column_ifexists("requestUri_s", ""))
+    | project TimeGenerated,
+        SrcIp = tostring(column_ifexists("clientIp_s", "")),
+        Method = tostring(column_ifexists("httpMethod_s", "")),
+        Host = extract(@"^https?://([^/:]+)", 1, _uri),
+        UrlPath = extract(@"^(?:https?://[^/]+)?([^?]*)", 1, _uri),
+        UrlQuery = extract(@"\?(.*)$", 1, _uri),
+        UserAgent = tostring(column_ifexists("userAgent_s", "")),
+        Status = toint(column_ifexists("httpStatusCode_s", "")),
+        Computer = Resource,
+        LogSource = "FrontDoor"),
+    // Pare-feu / WAF / proxy tiers en CEF (Fortinet, Palo Alto, F5, Imperva, Barracuda, Zscaler...)
+    (CommonSecurityLog
+    | where isnotempty(RequestURL)
+    | project TimeGenerated,
+        SrcIp = SourceIP,
+        Method = RequestMethod,
+        Host = coalesce(DestinationHostName, extract(@"^https?://([^/:]+)", 1, RequestURL)),
+        UrlPath = extract(@"^(?:https?://[^/]+)?([^?]*)", 1, RequestURL),
+        UrlQuery = extract(@"\?(.*)$", 1, RequestURL),
+        UserAgent = RequestClientApplication,
+        Status = toint(extract(@"(?i)(?:^|;)\s*(?:status|httpStatus|responseCode)=(\d{3})", 1, AdditionalExtensions)),
+        Computer,
+        LogSource = strcat("CEF:", DeviceVendor, " ", DeviceProduct)),
+    // Nginx / Apache envoyes en Syslog (format "combined")
+    (Syslog
+    | where ProcessName in~ ("nginx", "httpd", "apache", "apache2", "apache-access", "nginx-access")
+    | extend _m = extract_all(@"^(\S+) \S+ \S+ \[[^\]]+\] ""(\S+) (\S+)[^""]*"" (\d{3}) \S+ ""[^""]*"" ""([^""]*)""", SyslogMessage)
+    | where array_length(_m) > 0
+    | extend _uri = tostring(_m[0][2])
+    | project TimeGenerated,
+        SrcIp = tostring(_m[0][0]),
+        Method = tostring(_m[0][1]),
+        Host = HostName,
+        UrlPath = tostring(split(_uri, "?")[0]),
+        UrlQuery = extract(@"\?(.*)$", 1, _uri),
+        UserAgent = tostring(_m[0][4]),
+        Status = toint(_m[0][3]),
+        Computer,
+        LogSource = "Syslog")
+| extend Url = iff(isempty(UrlQuery), UrlPath, strcat(UrlPath, "?", UrlQuery))
+// Target = URL brute + URL decodee : les regles cherchent les charges dans les deux formes
+| extend Target = strcat(Url, " ", url_decode(Url))
