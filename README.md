@@ -22,6 +22,7 @@
 <p align="center">
   <a href="#-démarrage-rapide">Démarrage rapide</a> ·
   <a href="#-exemple-de-résultat">Exemple</a> ·
+  <a href="#-captures-du-tableau-de-bord-soar">Captures</a> ·
   <a href="#-architecture">Architecture</a> ·
   <a href="#-fonctionnalités">Fonctionnalités</a> ·
   <a href="#-structure-du-dépôt">Structure</a> ·
@@ -150,6 +151,17 @@ session PHP).
 Ce qu'il faut retenir : la source est classée **P1 (compromission probable)**, le blocage pare-feu
 est préparé mais seulement simulé, et l'isolation du serveur est **refusée par un garde-fou** tant
 que `web01` n'est pas déclaré dans l'inventaire. Le visiteur légitime `192.0.2.10` ne déclenche rien.
+
+## 📸 Captures du tableau de bord SOAR
+
+Le SOAR fournit un tableau de bord web (http://127.0.0.1:8080 avec Docker Compose) pour suivre
+les incidents, approuver ou rejeter les actions sensibles et consulter l'audit. Captures réelles
+de la plateforme alimentée par des journaux de test :
+
+| Vue d'ensemble | Détail d'un incident |
+|---|---|
+| [![Vue d'ensemble du tableau de bord ARTEX SOAR](soar/docs/dashboard.png)](soar/docs/dashboard.png) | [![Détail de l'incident P1 198.51.100.66, score 445](soar/docs/dashboard-incident.png)](soar/docs/dashboard-incident.png) |
+| Incidents actifs, progression des attaques par étape, répartition par gravité, connecteurs en mode simulé. | Score, étape atteinte, techniques ATT&CK, indicateurs détectés et chronologie de la réponse automatisée. |
 
 ## 🧭 Architecture
 
