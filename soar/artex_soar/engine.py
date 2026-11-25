@@ -1,4 +1,5 @@
 """Moteur SOAR : correlation des evenements en incidents, puis execution des playbooks."""
+import ipaddress
 import threading
 import time
 import uuid
@@ -8,7 +9,7 @@ from .connectors import build_connectors
 from .detection import TrackerPool, analyse_event
 from .guard import Guard
 from .models import SEVERITIES, Event, sev_rank
-from .signatures import STAGES
+from .signatures import OUTBOUND_IOC, STAGES
 from .store import Store
 
 CLOSED = ("closed", "false_positive")
@@ -29,6 +30,9 @@ class Engine:
         self.burst = int(det["burst_threshold"])
         self.timeout = float(det["incident_timeout"])
         self.pool = TrackerPool(int(det["max_tracked_sources"]))
+        # Vos propres reseaux : une alerte IDS qui en SORT vers un indicateur ARTEX (OAST, mise a
+        # jour d'instance...) designe une machine compromise chez vous, pas un attaquant a bloquer.
+        self.home = [ipaddress.ip_network(n, strict=False) for n in det.get("home_networks", []) or []]
         self.playbooks = cfg.get("playbooks") or []
         self._lock = threading.RLock()
         self._validate_playbooks()
@@ -119,6 +123,18 @@ class Engine:
                 self._persist(inc)
                 changed[inc["id"]] = inc
 
+    def _outbound_to_host(self, ev: Event) -> Event:
+        if ev.kind != "ids" or not self.home or not ev.source_ip:
+            return ev
+        try:
+            src = ipaddress.ip_address(ev.source_ip)
+        except ValueError:
+            return ev
+        if not any(src in net for net in self.home) or not OUTBOUND_IOC.search(ev.signature or ""):
+            return ev
+        return Event(ts=ev.ts, kind="host", target=ev.source_ip, sensor=ev.sensor,
+                     signature="Trafic sortant vers un indicateur ARTEX: " + ev.signature, raw=ev.raw)
+
     def _live(self, inc):
         """Retourne l'objet incident tenu en memoire par le moteur (s'il existe)."""
         tracker = self.pool._items.get(inc["key"])
@@ -144,6 +160,7 @@ class Engine:
             changed: Dict[str, Dict[str, Any]] = {}
             for ev in events:
                 n += 1
+                ev = self._outbound_to_host(ev)
                 key = f"host:{ev.target}" if ev.kind == "host" else ev.source_ip
                 if not key:
                     continue

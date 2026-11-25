@@ -5,8 +5,13 @@ from typing import Dict, List, Optional
 from urllib.parse import unquote_plus
 
 from .models import Event, Finding
-from .signatures import (ARTEX_HEADERS, ARTEX_UA, ENGAGEMENT, PAYLOAD_SIGNATURES, SENSITIVE_PATHS,
-                         UA_SIGNATURES, stage_for)
+
+from .signatures import (ARTEX_HEADERS, ARTEX_UA, ENGAGEMENT, EXTRA_PAYLOAD_SIGNATURES, LATERAL_IDS, LOGIN_PATH,
+                         PAYLOAD_SIGNATURES, SENSITIVE_PATHS, UA_SIGNATURES, UPLOAD_EXEC, stage_for)
+
+ALL_PAYLOAD_SIGNATURES = list(PAYLOAD_SIGNATURES) + EXTRA_PAYLOAD_SIGNATURES
+ID_SEGMENT = re.compile(r"/(\d{1,12}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?=/|$)", re.I)
+ID_PARAM = re.compile(r"[?&](id|user_?id|uid|account|order|invoice|doc|file_?id)=(\d{1,12})\b", re.I)
 
 # Plages de SID de rules/suricata/artex.rules
 SID_ARTEX_IDENTIFIERS = range(9100001, 9100020)
@@ -33,10 +38,13 @@ def analyse_event(ev: Event) -> List[Finding]:
                                    artex=bool(ARTEX_UA.search(ua)), engagement=engagement))
         uri = ev.uri or ""
         decoded = unquote_plus(unquote_plus(uri))
-        for rx, label, weight, tech in PAYLOAD_SIGNATURES:
-            if rx.search(decoded) or rx.search(uri):
+        for rx, label, weight, tech in ALL_PAYLOAD_SIGNATURES:
+            if rx.search(decoded) or rx.search(uri) or (label.startswith("Exploit connu") and rx.search(ua)):
                 out.append(Finding("Charge: " + label, weight, tech, stage_for(label, tech),
                                    success=_success(ev.status)))
+        if UPLOAD_EXEC.search(uri) and ev.status is not None and 200 <= ev.status < 300:
+            out.append(Finding("Execution d'un fichier televerse (webshell probable)", 100, "T1505.003",
+                               "execution", success=True))
         for name in ev.headers or {}:
             if ARTEX_HEADERS.search(name):
                 out.append(Finding(f"En-tete ARTEX: {name}", 100, "T1595", "recon", artex=True))
@@ -44,7 +52,9 @@ def analyse_event(ev: Event) -> List[Finding]:
     if ev.kind == "ids" and ev.signature:
         sid = ev.signature_id or 0
         msg = ev.signature
-        if sid in SID_PHP2SHELL or "php2shell" in msg.lower():
+        if LATERAL_IDS.search(msg):
+            out.append(Finding("IDS mouvement lateral: " + msg, 80, "T1021", "execution", success=True))
+        elif sid in SID_PHP2SHELL or "php2shell" in msg.lower():
             out.append(Finding("IDS: " + msg, 80, "T1190", "exploitation", success=_success(ev.status)))
         elif sid in SID_ARTEX_IDENTIFIERS:
             out.append(Finding("IDS: " + msg, 100, "T1595", "recon", artex=True))
@@ -63,6 +73,8 @@ def analyse_event(ev: Event) -> List[Finding]:
 
     if ev.kind == "auth":
         out.append(Finding("Echec d'authentification", 2, "T1110", "credential_access"))
+    if ev.kind == "auth_success":
+        out.append(Finding("Authentification reussie", 0, "T1078", "recon"))
     return out
 
 
@@ -80,6 +92,10 @@ class SourceTracker:
         self.auth_failures = 0
         self.max_rate = 0
         self.last = 0.0
+        self.login_posts = 0
+        self.ports = set()
+        self.id_values = {}
+        self.auth_success_after_failures = False
 
     def update(self, ev: Event, window: float = 10.0):
         self.count += 1
@@ -98,6 +114,23 @@ class SourceTracker:
             self.sensitive += 1
         if ev.kind == "auth":
             self.auth_failures += 1
+        if ev.kind == "auth_success" and self.auth_failures >= 5:
+            self.auth_success_after_failures = True
+        if ev.kind == "conn" and ev.signature.isdigit() and len(self.ports) < 70000:
+            self.ports.add(int(ev.signature))
+        if ev.kind == "http" and ev.method.upper() == "POST" and ev.uri and LOGIN_PATH.search(ev.uri.split("?")[0]):
+            self.login_posts += 1
+        if ev.kind == "http" and ev.uri:
+            path, _, query = ev.uri.partition("?")
+            template = ID_SEGMENT.sub("/{id}", path)
+            vals = [m.group(1) for m in ID_SEGMENT.finditer(path)]
+            for m in ID_PARAM.finditer("?" + query):
+                template += "?" + m.group(1).lower() + "={id}"
+                vals.append(m.group(2))
+            if vals and len(self.id_values) < 200:
+                self.id_values.setdefault(template, set())
+                if len(self.id_values[template]) < 1000:
+                    self.id_values[template].update(vals)
 
     def behaviour(self, burst_threshold: int) -> List[Finding]:
         out = []
@@ -113,6 +146,14 @@ class SourceTracker:
         if self.auth_failures >= 20:
             out.append(Finding("Brute force (echecs d'authentification repetes)", 60, "T1110",
                                "credential_access"))
+        if self.auth_success_after_failures:
+            out.append(Finding("Connexion reussie apres brute force", 100, "T1110", "execution", success=True))
+        if self.login_posts >= 20:
+            out.append(Finding("Brute force HTTP (formulaire de connexion)", 60, "T1110.001", "credential_access"))
+        if len(self.ports) >= 20:
+            out.append(Finding("Scan de ports", 40, "T1046", "recon"))
+        if any(len(v) >= 30 for v in self.id_values.values()):
+            out.append(Finding("Enumeration d'identifiants d'objets (IDOR / BOLA)", 40, "T1190", "exploitation"))
         return out
 
 

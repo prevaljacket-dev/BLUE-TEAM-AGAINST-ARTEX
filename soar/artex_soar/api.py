@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from . import __version__
 from .config import load_config
 from .engine import Engine
-from .parsers import parse_access_log, parse_generic, parse_suricata, parse_triage_host, parse_triage_logs
+from .parsers import (parse_access_log, parse_auth_log, parse_firewall_log, parse_generic, parse_suricata, parse_triage_host, parse_triage_logs)
 
 log = logging.getLogger("artex_soar")
 
@@ -59,6 +59,16 @@ def create_app(cfg: Dict[str, Any] = None, engine: Engine = None, api_key: str =
                                 user: str = Depends(auth)):
         body = (await request.body()).decode("utf-8", "replace")
         return engine.ingest(parse_access_log(body.splitlines(), sensor, target, time.time()))
+
+    @app.post("/api/v1/ingest/auth-log")
+    async def ingest_auth_log(request: Request, target: Optional[str] = None, user: str = Depends(auth)):
+        body = (await request.body()).decode("utf-8", "replace")
+        return engine.ingest(parse_auth_log(body.splitlines(), target, time.time()))
+
+    @app.post("/api/v1/ingest/firewall-log")
+    async def ingest_firewall_log(request: Request, target: Optional[str] = None, user: str = Depends(auth)):
+        body = (await request.body()).decode("utf-8", "replace")
+        return engine.ingest(parse_firewall_log(body.splitlines(), target, time.time()))
 
     @app.post("/api/v1/ingest/suricata")
     async def ingest_suricata(request: Request, user: str = Depends(auth)):

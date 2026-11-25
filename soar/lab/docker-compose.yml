@@ -1,0 +1,86 @@
+# LABO de test ARTEX -> ARTEX SOAR. Tout reste sur votre PC.
+#   docker compose up -d --build
+#   Tableau de bord : http://127.0.0.1:8080   (cle API : labo-artex)
+#   Cible du labo   : http://127.0.0.1:8081   (vue depuis ARTEX : http://lab-target/)
+#   Remise a zero   : docker compose down -v
+name: artex-lab
+
+x-soar: &soar
+  image: artex-soar:lab
+  build: {context: ../.., dockerfile: soar/Dockerfile}
+  environment: &soar-env
+    SOAR_API_KEY: ${SOAR_API_KEY:-labo-artex}
+    SOAR_URL: http://soar:8080
+  networks: [artex-lab]
+
+services:
+  # Prepare le dossier de controle partage (liste de blocage vide, pas de quarantaine).
+  lab-init:
+    <<: *soar
+    user: root
+    healthcheck: {disable: true}
+    entrypoint: ["sh", "-c"]
+    command: ["rm -f /lab-control/quarantine; touch /lab-control/blocked.txt; chown -R 10001 /lab-control; chmod 755 /lab-control; chmod 644 /lab-control/blocked.txt"]
+    volumes: [lab-control:/lab-control]
+
+  lab-target:
+    build: ./target
+    image: artex-lab-target:latest
+    depends_on:
+      lab-init: {condition: service_completed_successfully}
+    ports: ["127.0.0.1:8081:80"]          # uniquement sur votre PC
+    networks: [artex-lab]
+    volumes:
+      - lab-logs:/lab-logs
+      - lab-sessions:/var/lib/php/sessions
+      - lab-www:/var/www/html
+      - lab-control:/lab-control:ro       # la cible ne peut pas se debloquer elle-meme
+
+  soar:
+    <<: *soar
+    restart: unless-stopped
+    depends_on:
+      lab-init: {condition: service_completed_successfully}
+    environment:
+      <<: *soar-env
+      SOAR_CONFIG: /app/soar/lab/soar-lab.yml
+      SOAR_MODE: ${SOAR_MODE:-enforce}
+    ports: ["127.0.0.1:8080:8080"]
+    volumes:
+      - ./soar-lab.yml:/app/soar/lab/soar-lab.yml:ro
+      - soar-data:/app/soar/data
+      - lab-logs:/lab-logs:ro
+      - lab-control:/lab-control
+
+  # Envoie le journal d'acces de la cible au SOAR (comme sur un vrai serveur).
+  shipper:
+    <<: *soar
+    depends_on: [soar, lab-target]
+    restart: unless-stopped
+    healthcheck: {disable: true}
+    command: ["ship", "/lab-logs/access.log", "--target", "lab-target", "--from-start", "--interval", "2"]
+    volumes: [lab-logs:/lab-logs:ro]
+
+  # Chasse les traces de compromission (sessions PHP piegees, webshells) sur la cible.
+  hunter:
+    <<: *soar
+    depends_on: [soar, lab-target]
+    restart: unless-stopped
+    healthcheck: {disable: true}
+    user: root                            # lire les sessions PHP (proprietaire www-data)
+    command: ["hunt", "--host-name", "lab-target", "--webroot", "/var/www/html",
+              "--session-dir", "/var/lib/php/sessions", "--interval", "10"]
+    volumes:
+      - lab-sessions:/var/lib/php/sessions:ro
+      - lab-www:/var/www/html:ro
+
+networks:
+  artex-lab:
+    name: artex-lab
+
+volumes:
+  soar-data:
+  lab-logs:
+  lab-sessions:
+  lab-www:
+  lab-control:
