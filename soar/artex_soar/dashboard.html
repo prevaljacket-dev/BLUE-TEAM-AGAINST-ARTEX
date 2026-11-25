@@ -1,635 +1,640 @@
 <!doctype html>
-<html lang="fr" data-theme="dark">
+<html lang="fr" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ARTEX SOAR</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%2322d3ee' d='M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5z'/%3E%3C/svg%3E">
 <style>
-  :root, :root[data-theme="dark"] {
-    --bg: #0a0e14; --bg2: #0f141c; --panel: #131a24; --panel2: #18212d; --line: #232d3b; --line2: #2e3a4b;
-    --fg: #e6edf5; --fg2: #a9b6c6; --muted: #6f7f93;
-    --accent: #22d3ee; --accent-soft: rgba(34, 211, 238, .12);
-    --p1: #ff4d5e; --p1-soft: rgba(255, 77, 94, .14);
-    --p2: #ff9f43; --p2-soft: rgba(255, 159, 67, .14);
-    --p3: #4ea8ff; --p3-soft: rgba(78, 168, 255, .14);
-    --ok: #34d399; --ok-soft: rgba(52, 211, 153, .13);
-    --violet: #b78bff; --violet-soft: rgba(183, 139, 255, .14);
-    --shadow: 0 10px 30px rgba(0, 0, 0, .35);
-    color-scheme: dark;
-  }
-  :root[data-theme="light"] {
-    --bg: #f3f5f8; --bg2: #eceff4; --panel: #ffffff; --panel2: #f7f9fb; --line: #e1e6ed; --line2: #cfd7e2;
-    --fg: #121a24; --fg2: #3d4a5a; --muted: #6b7889;
-    --accent: #0891b2; --accent-soft: rgba(8, 145, 178, .1);
-    --p1: #d92d3c; --p1-soft: rgba(217, 45, 60, .1);
-    --p2: #c2610c; --p2-soft: rgba(194, 97, 12, .1);
-    --p3: #1d6fd6; --p3-soft: rgba(29, 111, 214, .1);
-    --ok: #0f8a5f; --ok-soft: rgba(15, 138, 95, .1);
-    --violet: #7c4ddb; --violet-soft: rgba(124, 77, 219, .1);
-    --shadow: 0 10px 30px rgba(18, 26, 36, .12);
+  /* Palette inspiree des consoles SIEM (portail Azure / Sentinel) : gris Fluent, bleu d'action, couleurs reservees a la gravite. */
+  :root, :root[data-theme="light"] {
+    --bg: #faf9f8; --bg-head: #1b1a19; --head-text: #f3f2f1; --bg-nav: #ffffff; --surface: #ffffff; --surface-2: #f3f2f1; --row-alt: #ffffff;
+    --hover: #f3f2f1; --sel: #deecf9; --border: #edebe9; --border-2: #c8c6c4;
+    --text: #323130; --text-2: #605e5c; --text-3: #8a8886; --link: #0078d4;
+    --accent: #0078d4; --accent-text: #fff;
+    --crit: #d13438; --high: #d13438; --med: #f7630c; --low: #e3a300; --info: #8a8886; --ok: #107c10; --artex: #8764b8; --new: #0078d4;
     color-scheme: light;
   }
+  :root[data-theme="dark"] {
+    --bg: #1b1a19; --bg-head: #111110; --head-text: #f3f2f1; --bg-nav: #201f1e; --surface: #252423; --surface-2: #2d2c2b; --row-alt: #252423;
+    --hover: #323130; --sel: #1c3a57; --border: #3b3a39; --border-2: #4d4c4b;
+    --text: #f3f2f1; --text-2: #c8c6c4; --text-3: #979593; --link: #4aa3f0;
+    --accent: #2b88d8; --accent-text: #fff;
+    --crit: #f1707b; --high: #f1707b; --med: #fc9a4b; --low: #fce100; --info: #a19f9d; --ok: #92c353; --artex: #b4a0ff; --new: #4aa3f0;
+    color-scheme: dark;
+  }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; }
-  body { background: var(--bg); color: var(--fg); font: 14px/1.5 Inter, "Segoe UI", system-ui, -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
-  code, .mono { font-family: "JetBrains Mono", "Cascadia Code", Consolas, ui-monospace, monospace; font-size: 12.5px; }
-  button { font: inherit; color: inherit; cursor: pointer; }
-  input, select { font: inherit; color: var(--fg); }
-  a { color: var(--accent); }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 13px/1.4 "Segoe UI", "Segoe UI Web (West European)", -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif; }
+  .mono, code { font-family: Consolas, "SFMono-Regular", Menlo, "Liberation Mono", monospace; font-size: 12px; }
+  a { color: var(--link); text-decoration: none; } a:hover { text-decoration: underline; }
+  button, select, input { font: inherit; color: var(--text); }
+  h1, h2, h3 { font-weight: 600; margin: 0; }
 
-  /* ---------- structure ---------- */
-  .app { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
-  aside { background: var(--bg2); border-right: 1px solid var(--line); padding: 20px 14px; display: flex; flex-direction: column; gap: 22px; position: sticky; top: 0; height: 100vh; }
-  .brand { display: flex; align-items: center; gap: 10px; padding: 0 6px; }
-  .brand svg { width: 30px; height: 30px; flex: none; }
-  .brand b { font-size: 16px; letter-spacing: .4px; }
-  .brand small { display: block; color: var(--muted); font-size: 11px; letter-spacing: .3px; }
-  nav { display: flex; flex-direction: column; gap: 2px; }
-  nav button { display: flex; align-items: center; gap: 10px; background: none; border: 0; border-radius: 8px; padding: 9px 10px; color: var(--fg2); text-align: left; font-weight: 500; }
-  nav button svg { width: 17px; height: 17px; flex: none; opacity: .85; }
-  nav button:hover { background: var(--panel); color: var(--fg); }
-  nav button.active { background: var(--accent-soft); color: var(--accent); }
-  nav .count { margin-left: auto; background: var(--p1); color: #fff; font-size: 11px; font-weight: 700; border-radius: 10px; padding: 0 7px; min-width: 20px; text-align: center; }
-  .side-block { border-top: 1px solid var(--line); padding-top: 16px; }
-  .side-title { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .8px; margin: 0 6px 8px; }
-  .conn { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 6px; font-size: 12.5px; color: var(--fg2); }
-  .side-foot { margin-top: auto; display: flex; gap: 6px; flex-wrap: wrap; }
-  main { min-width: 0; padding: 24px 28px 48px; }
-  .topbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; }
-  .topbar h1 { font-size: 22px; margin: 0; font-weight: 650; letter-spacing: -.2px; }
-  .topbar .sub { color: var(--muted); font-size: 13px; }
-  .grow { flex: 1; }
-  .live { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12.5px; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 0 var(--ok); animation: pulse 2s infinite; }
-  .dot.off { background: var(--p1); animation: none; }
-  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, .5); } 70% { box-shadow: 0 0 0 8px rgba(52, 211, 153, 0); } 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); } }
-  @media (prefers-reduced-motion: reduce) { .dot { animation: none; } }
+  /* --- en-tete --- */
+  header { height: 40px; color: var(--head-text); background: var(--bg-head); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; padding: 0 12px; position: sticky; top: 0; z-index: 10; }
+  .product { font-weight: 700; letter-spacing: .2px; white-space: nowrap; }
+  .product span { color: #a19f9d; font-weight: 400; }
+  header .hitem { color: #c8c6c4; } header .hitem b { color: #fff; } header .hsep { background: #3b3a39; }
+  header select, header .btn { background: transparent; color: var(--head-text); border-color: #605e5c; }
+  header .btn:hover { background: #323130; }
+  header option { color: #323130; }
+  .hsep { width: 1px; height: 20px; background: var(--border); }
+  .hitem { color: var(--text-2); white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+  .hitem b { color: var(--text); font-weight: 600; }
+  .mode-dry { color: #fce100; font-weight: 600; } .mode-enf { color: #f1707b; font-weight: 600; }
+  .spacer { flex: 1; }
+  select, input[type=text], input[type=password], input[type=search] { background: var(--surface); border: 1px solid var(--border-2); border-radius: 2px; padding: 3px 6px; height: 26px; }
+  input:focus, select:focus { outline: 1px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+  .btn { height: 26px; padding: 0 10px; border: 1px solid var(--border-2); background: var(--surface-2); border-radius: 2px; cursor: pointer; white-space: nowrap; }
+  .btn:hover { background: var(--hover); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  .btn.danger { color: var(--crit); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn:focus-visible, .nav a:focus-visible, th.sort:focus-visible, tr.rowlink:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
-  /* ---------- composants ---------- */
-  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
-  .panel-h { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
-  .panel-h h2 { font-size: 14px; margin: 0; font-weight: 600; }
-  .panel-h .hint { color: var(--muted); font-size: 12.5px; }
-  .panel-b { padding: 14px 16px; }
-  .grid { display: grid; gap: 16px; }
-  .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .two { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); }
-  .kpi { padding: 16px; position: relative; overflow: hidden; }
-  .kpi .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .7px; }
-  .kpi .value { font-size: 30px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
-  .kpi .note { color: var(--fg2); font-size: 12.5px; }
-  .kpi::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--kc, var(--accent)); }
-  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; letter-spacing: .3px; white-space: nowrap; border: 1px solid transparent; }
-  .sev-P1 { color: var(--p1); background: var(--p1-soft); border-color: color-mix(in srgb, var(--p1) 35%, transparent); }
-  .sev-P2 { color: var(--p2); background: var(--p2-soft); border-color: color-mix(in srgb, var(--p2) 35%, transparent); }
-  .sev-P3 { color: var(--p3); background: var(--p3-soft); border-color: color-mix(in srgb, var(--p3) 35%, transparent); }
-  .b-artex { color: var(--violet); background: var(--violet-soft); border-color: color-mix(in srgb, var(--violet) 40%, transparent); }
-  .b-ok { color: var(--ok); background: var(--ok-soft); }
-  .b-warn { color: var(--p2); background: var(--p2-soft); }
-  .b-bad { color: var(--p1); background: var(--p1-soft); }
-  .b-mute { color: var(--fg2); background: var(--panel2); border-color: var(--line); }
-  .b-info { color: var(--accent); background: var(--accent-soft); }
-  .btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line2); background: var(--panel2); border-radius: 8px; padding: 6px 12px; font-weight: 550; font-size: 13px; }
-  .btn:hover { border-color: var(--fg2); }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: #04141a; }
-  .btn.ok { background: var(--ok); border-color: var(--ok); color: #04140d; }
-  .btn.danger { color: var(--p1); border-color: color-mix(in srgb, var(--p1) 45%, transparent); background: transparent; }
-  .btn.ghost { background: transparent; }
-  .btn.sm { padding: 4px 9px; font-size: 12px; }
-  .btn:focus-visible, nav button:focus-visible, .chip:focus-visible, tr.click:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .empty { color: var(--muted); padding: 26px 16px; text-align: center; }
+  /* --- structure --- */
+  .layout { display: grid; grid-template-columns: 190px minmax(0, 1fr); min-height: calc(100vh - 40px); }
+  .nav { background: var(--bg-nav); border-right: 1px solid var(--border); padding: 8px 0; }
+  .nav .grp { color: var(--text-3); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; padding: 10px 14px 4px; }
+  .nav a { display: flex; justify-content: space-between; align-items: center; padding: 5px 14px; color: var(--text-2); border-left: 3px solid transparent; }
+  .nav a:hover { background: var(--hover); color: var(--text); text-decoration: none; }
+  .nav a.active { background: var(--sel); color: var(--text); border-left-color: var(--accent); font-weight: 600; }
+  .nav .n { font-size: 11px; color: var(--text-2); background: var(--surface-2); border: 1px solid var(--border); border-radius: 2px; padding: 0 5px; }
+  .nav .n.alert { color: #fff; background: var(--crit); border-color: var(--crit); }
+  main { padding: 12px 16px 32px; min-width: 0; }
+  .crumbs { color: var(--text-3); font-size: 12px; margin-bottom: 4px; }
+  .title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .title-row h1 { font-size: 17px; }
+  .box { background: var(--surface); border: 1px solid var(--border); }
+  .box + .box, .row + .box, .box + .row { margin-top: 12px; }
+  .box-h { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--border); font-weight: 600; }
+  .box-h .sub { color: var(--text-3); font-weight: 400; }
+  .box-b { padding: 10px; }
+  .row { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
-  /* tableaux */
-  .tbl-wrap { overflow-x: auto; }
+  /* --- barre d'outils --- */
+  .toolbar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 7px 10px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+  .toolbar .q { flex: 1 1 320px; min-width: 200px; }
+  .toolbar label { color: var(--text-3); font-size: 12px; }
+  .hint { color: var(--text-3); font-size: 12px; }
+
+  /* --- tableaux --- */
+  .tw { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; }
-  th { text-align: left; color: var(--muted); font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .6px; padding: 10px 16px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-  td { padding: 12px 16px; border-bottom: 1px solid var(--line); vertical-align: middle; }
-  tr:last-child td { border-bottom: 0; }
-  tr.click { cursor: pointer; }
-  tr.click:hover td { background: var(--panel2); }
-  .ip { font-weight: 600; }
-  .muted { color: var(--muted); }
-  .fg2 { color: var(--fg2); }
-  .nowrap { white-space: nowrap; }
-  .trunc { max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  th { text-align: left; font-weight: 600; color: var(--text-2); font-size: 12px; padding: 5px 8px; border-bottom: 1px solid var(--border-2); background: var(--surface); white-space: nowrap; position: sticky; top: 0; user-select: none; }
+  th.sort { cursor: pointer; }
+  th.sort:hover { color: var(--text); }
+  th .ar { color: var(--text-3); font-size: 10px; margin-left: 3px; }
+  td { padding: 4px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tbody tr:nth-child(even) td { background: var(--row-alt); }
+  tr.rowlink { cursor: pointer; }
+  tr.rowlink:hover td { background: var(--hover); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .nw { white-space: nowrap; }
+  .t2 { color: var(--text-2); } .t3 { color: var(--text-3); }
+  .clip { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .empty td { color: var(--text-3); padding: 14px 8px; text-align: center; background: transparent !important; }
+  .pager { display: flex; align-items: center; gap: 8px; justify-content: flex-end; padding: 6px 10px; border-top: 1px solid var(--border); color: var(--text-2); font-size: 12px; }
+  .pager select { height: 22px; padding: 0 4px; }
+  .pager .btn { height: 22px; padding: 0 8px; }
 
-  /* barre de score et chaîne d'attaque */
-  .score { display: flex; align-items: center; gap: 8px; min-width: 120px; }
-  .score .bar { flex: 1; height: 6px; background: var(--panel2); border-radius: 4px; overflow: hidden; border: 1px solid var(--line); }
-  .score .bar i { display: block; height: 100%; border-radius: 4px; }
-  .chain { display: flex; gap: 4px; }
-  .chain span { flex: 1; height: 6px; border-radius: 3px; background: var(--panel2); border: 1px solid var(--line); }
-  .chain span.on { border-color: transparent; }
-  .chain-lbl { font-size: 11.5px; color: var(--fg2); margin-top: 4px; }
-  .killchain { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-  .kc { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 12px; position: relative; }
-  .kc .n { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .kc .t { color: var(--fg2); font-size: 12.5px; }
-  .kc .step { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .7px; }
-  .kc::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: 0; height: 3px; border-radius: 3px 3px 0 0; background: var(--kcc); opacity: .9; }
-  .distrib { display: flex; height: 10px; border-radius: 6px; overflow: hidden; background: var(--panel2); border: 1px solid var(--line); }
-  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; font-size: 12.5px; color: var(--fg2); }
-  .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; }
+  /* --- etiquettes --- */
+  .sev { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; white-space: nowrap; }
+  .sev::before { content: ""; width: 8px; height: 8px; border-radius: 1px; background: var(--c); }
+  .sev::before { width: 4px; height: 14px; border-radius: 0; }
+  .sev-P1 { --c: var(--high); } .sev-P2 { --c: var(--med); } .sev-P3 { --c: var(--low); }
+  .tag { display: inline-block; padding: 0 5px; border: 1px solid var(--border-2); border-radius: 2px; font-size: 11px; line-height: 17px; color: var(--text-2); white-space: nowrap; background: var(--surface-2); }
+  .tag.artex { color: var(--artex); border-color: var(--artex); background: transparent; }
+  .st { white-space: nowrap; }
+  .st::before { content: "●"; margin-right: 4px; font-size: 9px; vertical-align: 1px; color: var(--c, var(--text-3)); }
+  .st-open { --c: var(--new); } .st-authorized { --c: var(--low); } .st-closed, .st-false_positive { --c: var(--text-3); }
+  .st-done { --c: var(--ok); } .st-dry_run { --c: var(--low); } .st-failed { --c: var(--crit); } .st-pending_approval { --c: var(--med); }
+  .st-rejected, .st-blocked_by_guard { --c: var(--text-3); }
 
-  /* approbations */
-  .approval { display: flex; gap: 14px; align-items: flex-start; padding: 14px 16px; border-bottom: 1px solid var(--line); }
-  .approval:last-child { border-bottom: 0; }
-  .approval .ico { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--p2-soft); color: var(--p2); flex: none; }
-  .approval .ico svg { width: 18px; height: 18px; }
-  .approval .body { flex: 1; min-width: 0; }
-  .approval .title { font-weight: 600; }
-  .approval .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  /* --- synthese --- */
+  .stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border: 1px solid var(--border); background: var(--surface); }
+  .stat { padding: 8px 12px; border-right: 1px solid var(--border); }
+  .stat:last-child { border-right: 0; }
+  .stat .v { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stat .l { color: var(--text-3); font-size: 12px; }
+  .hist { width: 100%; height: auto; max-height: 150px; display: block; }
+  .hist rect.b { fill: var(--accent); opacity: .85; }
+  .hist text { fill: var(--text-3); font-size: 10px; font-family: "Segoe UI", -apple-system, Roboto, Arial, sans-serif; }
+  .row > .box { margin-top: 0 !important; }
+  .hist line { stroke: var(--border); }
 
-  /* filtres */
-  .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); }
-  .chip { border: 1px solid var(--line2); background: transparent; border-radius: 999px; padding: 4px 12px; font-size: 12.5px; color: var(--fg2); }
-  .chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
-  .search { margin-left: auto; display: flex; align-items: center; gap: 6px; background: var(--panel2); border: 1px solid var(--line2); border-radius: 8px; padding: 5px 10px; min-width: 220px; }
-  .search input { background: none; border: 0; outline: none; width: 100%; }
+  /* --- detail --- */
+  .kv { display: grid; grid-template-columns: 160px minmax(0, 1fr); }
+  .kv div { padding: 4px 10px; border-bottom: 1px solid var(--border); }
+  .kv div:nth-child(odd) { color: var(--text-3); }
+  .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .tabs a { padding: 7px 14px; color: var(--text-2); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tabs a.on { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+  .tabs a:hover { text-decoration: none; color: var(--text); }
+  pre { margin: 0; padding: 10px; overflow: auto; background: var(--bg); color: var(--text-2); font-size: 12px; max-height: 520px; }
+  .cmd { display: block; margin-top: 3px; color: var(--text-2); white-space: pre-wrap; word-break: break-all; }
+  .notice { padding: 7px 10px; border: 1px solid var(--border); border-left: 3px solid var(--med); background: var(--surface); color: var(--text-2); margin-bottom: 12px; }
 
-  /* tiroir de détail */
-  .scrim { position: fixed; inset: 0; background: rgba(3, 6, 10, .55); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 30; }
-  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(640px, 100%); background: var(--bg2); border-left: 1px solid var(--line); box-shadow: var(--shadow); transform: translateX(100%); transition: transform .22s ease; z-index: 31; display: flex; flex-direction: column; }
-  .open .scrim { opacity: 1; pointer-events: auto; }
-  .open .drawer { transform: none; }
-  .drawer-h { padding: 18px 20px; border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: flex-start; }
-  .drawer-h h3 { margin: 4px 0 0; font-size: 20px; }
-  .drawer-b { padding: 18px 20px 32px; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; }
-  .sec-t { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .7px; margin-bottom: 8px; font-weight: 600; }
-  .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-  .fact { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
-  .fact .k { color: var(--muted); font-size: 11.5px; }
-  .fact .v { font-weight: 600; margin-top: 2px; overflow-wrap: anywhere; }
-  .ind { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px dashed var(--line); }
-  .ind:last-child { border-bottom: 0; }
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .timeline { position: relative; padding-left: 18px; }
-  .timeline::before { content: ""; position: absolute; left: 5px; top: 4px; bottom: 4px; width: 2px; background: var(--line); }
-  .tl { position: relative; padding: 0 0 14px; }
-  .tl::before { content: ""; position: absolute; left: -17px; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--tlc, var(--muted)); border: 2px solid var(--bg2); }
-  .cmd { display: block; margin-top: 6px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; word-break: break-all; color: var(--fg2); }
-  .sample { display: block; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; word-break: break-all; color: var(--fg2); margin-bottom: 6px; }
+  /* --- barre de commandes, resume, volet --- */
+  .cmdbar { display: flex; gap: 2px; flex-wrap: wrap; align-items: center; padding: 4px 0; margin-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .cmdbar .btn { background: transparent; border-color: transparent; color: var(--text); }
+  .cmdbar .btn:hover { background: var(--hover); }
+  .cmdbar .ico { color: var(--accent); margin-right: 4px; }
+  .summary { display: flex; gap: 0; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--border); margin-bottom: 12px; }
+  .summary .cell { padding: 10px 18px; border-right: 1px solid var(--border); min-width: 120px; }
+  .summary .cell:last-child { border-right: 0; flex: 1; min-width: 260px; }
+  .summary .v { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .summary .l { color: var(--text-2); font-size: 12px; }
+  .sevbar { display: flex; height: 8px; margin: 8px 0 6px; background: var(--surface-2); }
+  .sevbar span { display: block; height: 100%; }
+  .sevleg { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--text-2); }
+  .sevleg b { color: var(--text); font-weight: 600; margin-left: 4px; }
+  .sevleg i { display: inline-block; width: 4px; height: 12px; margin-right: 6px; vertical-align: -2px; }
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+  .filters input[type=search] { width: 340px; max-width: 100%; }
+  .pill { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 8px; border: 1px solid var(--border-2); border-radius: 13px; background: var(--surface); font-size: 12px; color: var(--text-2); }
+  .pill select { border: 0; height: 22px; padding: 0 2px; background: transparent; color: var(--text); font-weight: 600; }
+  .pill select:focus { outline: none; }
+  .split { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .split.with-pane { grid-template-columns: minmax(0, 1fr) 400px; }
+  .pane { background: var(--surface); border: 1px solid var(--border); border-left: 0; min-width: 0; }
+  .pane-h { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  .pane-h .ttl { font-size: 15px; font-weight: 600; margin: 4px 0; }
+  .pane-sec { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .pane-sec h3 { font-size: 12px; color: var(--text-2); margin-bottom: 6px; }
+  .meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 12px; }
+  .meta .k { color: var(--text-3); font-size: 11px; } .meta .v { font-weight: 600; overflow-wrap: anywhere; }
+  tr.selected td { background: var(--sel) !important; }
+  .incpage { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 12px; align-items: start; }
+  .ttl-cell { max-width: 420px; min-width: 240px; }
+  .with-pane .hide-pane { display: none; }
+  .tactics { display: flex; gap: 3px; flex-wrap: wrap; }
 
-  /* connexion */
-  .login { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px;
-           background: radial-gradient(1200px 600px at 20% 10%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 60%), var(--bg); }
-  .login .card { width: min(400px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 28px; box-shadow: var(--shadow); }
-  .login h2 { margin: 14px 0 4px; font-size: 20px; }
-  .login p { color: var(--fg2); margin: 0 0 18px; font-size: 13.5px; }
-  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
-  .field label { font-size: 12.5px; color: var(--fg2); font-weight: 550; }
-  .field input { background: var(--panel2); border: 1px solid var(--line2); border-radius: 8px; padding: 9px 12px; outline: none; }
-  .field input:focus { border-color: var(--accent); }
-  .login .btn { width: 100%; justify-content: center; padding: 10px; }
+  /* --- connexion --- */
+  .login { max-width: 360px; margin: 12vh auto 0; padding: 0 16px; }
+  .login .box-b { display: grid; gap: 10px; }
+  .login label { display: grid; gap: 4px; color: var(--text-2); font-size: 12px; }
+  .login input { width: 100%; height: 30px; }
+  .err { color: var(--crit); font-size: 12px; min-height: 16px; }
   .hidden { display: none !important; }
+  #toast { position: fixed; right: 12px; bottom: 12px; background: var(--surface); border: 1px solid var(--border-2); border-left: 3px solid var(--ok); padding: 8px 12px; z-index: 20; max-width: calc(100% - 24px); }
+  #toast.bad { border-left-color: var(--crit); }
 
-  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line2); border-radius: 10px; padding: 10px 16px; box-shadow: var(--shadow); z-index: 60; font-size: 13.5px; max-width: calc(100% - 32px); }
-  .toast.err { border-color: var(--p1); color: var(--p1); }
-
-  /* ---------- mobile ---------- */
-  @media (max-width: 1100px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .two { grid-template-columns: 1fr; } }
+  @media (max-width: 1100px) { .split.with-pane, .incpage { grid-template-columns: minmax(0, 1fr); } .pane { border-left: 1px solid var(--border); border-top: 0; } .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } .stat:nth-child(3) { border-right: 0; } .stat:nth-child(-n+3) { border-bottom: 1px solid var(--border); } .row { grid-template-columns: 1fr; } }
   @media (max-width: 760px) {
-    .app { grid-template-columns: minmax(0, 1fr); }
-    aside { min-width: 0; position: static; height: auto; padding: 12px 16px; gap: 10px; border-right: 0; border-bottom: 1px solid var(--line); }
-    nav { flex-direction: row; overflow-x: auto; }
-    nav button { white-space: nowrap; }
-    .side-block { display: none; }
-    .side-foot { margin: 0; }
-    main { padding: 16px 16px 40px; }
-    .killchain { grid-template-columns: repeat(2, 1fr); }
-    .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .search { margin-left: 0; min-width: 0; width: 100%; }
-    .approval { flex-wrap: wrap; }
-    th, td { padding: 10px 12px; }
-    .hide-sm { display: none; }
+    header { height: auto; flex-wrap: wrap; padding: 6px 12px; gap: 8px; }
+    .hsep, .hide-sm { display: none !important; }
+    .layout { grid-template-columns: minmax(0, 1fr); }
+    .nav { display: flex; overflow-x: auto; padding: 0; border-right: 0; border-bottom: 1px solid var(--border); }
+    .nav .grp { display: none; }
+    .nav a { border-left: 0; border-bottom: 2px solid transparent; white-space: nowrap; gap: 6px; padding: 8px 12px; }
+    .nav a.active { border-bottom-color: var(--accent); }
+    main { padding: 10px 12px 24px; }
+    .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .stat { border-bottom: 1px solid var(--border); } .stat:nth-child(odd) { border-right: 1px solid var(--border) !important; } .stat:nth-child(even) { border-right: 0 !important; }
+    .kv { grid-template-columns: 120px minmax(0, 1fr); }
   }
 </style>
 </head>
 <body>
 
-<!-- Connexion -->
-<div class="login" id="login">
-  <form class="card" id="loginForm">
-    <div class="brand"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="var(--accent)" d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5z"/><path fill="none" stroke="#04141a" stroke-width="2" d="m8.5 12 2.5 2.5 4.5-5"/></svg><div><b>ARTEX SOAR</b><small>Centre de réponse défensif</small></div></div>
-    <h2>Connexion</h2>
-    <p>Saisissez la clé <code>SOAR_API_KEY</code> de votre fichier <code>.env</code>.</p>
-    <div class="field"><label for="key">Clé API</label><input id="key" type="password" autocomplete="current-password" required></div>
-    <div class="field"><label for="user">Votre nom (journal d'audit)</label><input id="user" placeholder="ex. jack" autocomplete="username"></div>
-    <button class="btn primary" type="submit">Se connecter</button>
-    <p class="muted" id="loginErr" style="margin:12px 0 0;color:var(--p1)"></p>
-  </form>
-</div>
-
-<div class="app" id="app">
-  <aside>
-    <div class="brand"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="var(--accent)" d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5z"/><path fill="none" stroke="#04141a" stroke-width="2" d="m8.5 12 2.5 2.5 4.5-5"/></svg><div><b>ARTEX SOAR</b><small>Centre de réponse défensif</small></div></div>
-    <nav id="nav">
-      <button data-view="overview" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Vue d'ensemble</button>
-      <button data-view="incidents"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>Incidents<span class="count hidden" id="navInc"></span></button>
-      <button data-view="approvals"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Approbations<span class="count hidden" id="navApp"></span></button>
-      <button data-view="actions"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg>Actions</button>
-      <button data-view="audit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>Audit</button>
-    </nav>
-    <div class="side-block">
-      <div class="side-title">Mode</div>
-      <div style="padding:0 6px" id="modeBox"></div>
-    </div>
-    <div class="side-block">
-      <div class="side-title">Connecteurs</div>
-      <div id="connList"></div>
-    </div>
-    <div class="side-foot">
-      <button class="btn ghost sm" id="themeBtn" title="Changer de thème">Thème clair</button>
-      <button class="btn ghost sm" id="logoutBtn">Déconnexion</button>
-    </div>
-  </aside>
-
-  <main>
-    <div class="topbar">
-      <div><h1 id="viewTitle">Vue d'ensemble</h1><div class="sub" id="viewSub">Situation des campagnes ARTEX détectées</div></div>
-      <div class="grow"></div>
-      <span class="live"><span class="dot" id="liveDot"></span><span id="liveTxt">Connexion…</span></span>
-      <button class="btn sm" id="refreshBtn">Actualiser</button>
-    </div>
-
-    <!-- Vue d'ensemble -->
-    <section data-section="overview">
-      <div class="grid kpis" id="kpis"></div>
-      <div class="grid two" style="margin-top:16px">
-        <div class="panel">
-          <div class="panel-h"><h2>Progression des attaques</h2><span class="hint">incidents ouverts par étape atteinte</span></div>
-          <div class="panel-b"><div class="killchain" id="killchain"></div>
-            <div style="margin-top:18px" class="sec-t">Répartition par gravité</div>
-            <div class="distrib" id="distrib"></div><div class="legend" id="legend"></div>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="panel-h"><h2>À traiter</h2><span class="hint" id="pendHint"></span></div>
-          <div id="pendingOverview"></div>
-        </div>
+<div id="loginView" class="hidden">
+  <div class="login">
+    <div class="product" style="font-size:16px;margin-bottom:10px">ARTEX SOAR <span>· réponse aux incidents</span></div>
+    <form class="box" id="loginForm">
+      <div class="box-h">Authentification</div>
+      <div class="box-b">
+        <label>Clé API (SOAR_API_KEY)<input id="key" type="password" autocomplete="current-password" required></label>
+        <label>Identifiant analyste (journal d'audit)<input id="user" type="text" autocomplete="username" placeholder="jdupont"></label>
+        <div class="err" id="loginErr"></div>
+        <button class="btn primary" type="submit">Se connecter</button>
       </div>
-      <div class="panel" style="margin-top:16px">
-        <div class="panel-h"><h2>Incidents récents</h2><div class="grow"></div><button class="btn sm ghost" data-goto="incidents">Tout voir</button></div>
-        <div class="tbl-wrap"><table><thead><tr><th>Gravité</th><th>Source</th><th class="hide-sm">Cible</th><th>Score</th><th class="hide-sm">Étape</th><th>Statut</th><th class="hide-sm">Dernière activité</th></tr></thead><tbody id="recent"></tbody></table></div>
-      </div>
-    </section>
-
-    <!-- Incidents -->
-    <section data-section="incidents" class="hidden">
-      <div class="panel">
-        <div class="filters" id="incFilters">
-          <button class="chip on" data-f="open">Actifs</button>
-          <button class="chip" data-f="all">Tous</button>
-          <button class="chip" data-f="P1">P1</button>
-          <button class="chip" data-f="P2">P2</button>
-          <button class="chip" data-f="P3">P3</button>
-          <button class="chip" data-f="artex">ARTEX confirmé</button>
-          <button class="chip" data-f="closed">Clos / faux positifs</button>
-          <label class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input id="incSearch" placeholder="IP, serveur, indicateur…" aria-label="Rechercher"></label>
-        </div>
-        <div class="tbl-wrap"><table><thead><tr><th>Gravité</th><th>Source</th><th class="hide-sm">Cible</th><th>Score</th><th class="hide-sm">Étape</th><th class="hide-sm">Indicateurs</th><th>Statut</th><th class="hide-sm">Dernière activité</th></tr></thead><tbody id="incTable"></tbody></table></div>
-      </div>
-    </section>
-
-    <!-- Approbations -->
-    <section data-section="approvals" class="hidden">
-      <div class="panel"><div class="panel-h"><h2>Actions en attente de votre décision</h2><span class="hint">même approuvée, une action reste simulée tant que le mode est « dry-run »</span></div><div id="pendingFull"></div></div>
-    </section>
-
-    <!-- Actions -->
-    <section data-section="actions" class="hidden">
-      <div class="panel">
-        <div class="filters" id="actFilters">
-          <button class="chip on" data-f="all">Toutes</button>
-          <button class="chip" data-f="dry_run">Simulées</button>
-          <button class="chip" data-f="done">Exécutées</button>
-          <button class="chip" data-f="pending_approval">En attente</button>
-          <button class="chip" data-f="blocked_by_guard">Refusées</button>
-          <button class="chip" data-f="failed">Échecs</button>
-        </div>
-        <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Action</th><th class="hide-sm">Connecteur</th><th>Statut</th><th>Détail</th></tr></thead><tbody id="actTable"></tbody></table></div>
-      </div>
-    </section>
-
-    <!-- Audit -->
-    <section data-section="audit" class="hidden">
-      <div class="panel"><div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Acteur</th><th>Événement</th><th>Détail</th></tr></thead><tbody id="auditTable"></tbody></table></div></div>
-    </section>
-  </main>
-</div>
-
-<!-- Détail d'un incident -->
-<div id="drawerRoot">
-  <div class="scrim" id="scrim"></div>
-  <div class="drawer" role="dialog" aria-modal="true" aria-labelledby="dTitle">
-    <div class="drawer-h">
-      <div class="grow"><div id="dBadges" class="chips"></div><h3 id="dTitle" class="mono"></h3><div class="muted" id="dSub"></div></div>
-      <button class="btn sm ghost" id="dClose" aria-label="Fermer">Fermer</button>
-    </div>
-    <div class="drawer-b" id="dBody"></div>
+    </form>
   </div>
 </div>
 
-<div class="toast hidden" id="toast" role="status"></div>
+<div id="appView" class="hidden">
+  <header>
+    <div class="product">ARTEX SOAR <span id="ver"></span></div>
+    <div class="hsep"></div>
+    <div class="hitem">Mode <b id="mode">-</b></div>
+    <div class="hsep"></div>
+    <div class="hitem hide-sm">Fuseau <b>UTC</b></div>
+    <div class="spacer"></div>
+    <div class="hitem hide-sm t3" id="lastRef">-</div>
+    <select id="autoRef" aria-label="Actualisation automatique" title="Actualisation automatique">
+      <option value="0">Actualisation : off</option><option value="15000">15 s</option><option value="30000" selected>30 s</option><option value="60000">1 min</option>
+    </select>
+    <button class="btn" id="refBtn">Actualiser</button>
+    <div class="hsep"></div>
+    <div class="hitem"><span id="who" class="mono"></span></div>
+    <button class="btn" id="themeBtn" title="Thème">Clair</button>
+    <button class="btn" id="logoutBtn">Déconnexion</button>
+  </header>
+  <div class="layout">
+    <nav class="nav" id="nav">
+      <div class="grp">Supervision</div>
+      <a href="#/overview" data-r="overview">Synthèse</a>
+      <a href="#/incidents" data-r="incidents">Incidents <span class="n" id="cInc">0</span></a>
+      <div class="grp">Réponse</div>
+      <a href="#/approvals" data-r="approvals">File d'approbation <span class="n" id="cApp">0</span></a>
+      <a href="#/actions" data-r="actions">Journal des actions</a>
+      <div class="grp">Administration</div>
+      <a href="#/connectors" data-r="connectors">Connecteurs &amp; playbooks</a>
+      <a href="#/audit" data-r="audit">Audit</a>
+    </nav>
+    <main id="main"></main>
+  </div>
+</div>
+<div id="toast" class="hidden" role="status"></div>
 
 <script>
 (() => {
-  const $ = (s, r = document) => r.querySelector(s);
-  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  "use strict";
+  const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const store = {
-    get(k) { try { return sessionStorage.getItem(k) || ""; } catch { return ""; } },
-    set(k, v) { try { sessionStorage.setItem(k, v); } catch {} },
-    del(k) { try { sessionStorage.removeItem(k); } catch {} },
-    pref(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } },
+  const ss = { get: k => { try { return sessionStorage.getItem(k) || ""; } catch { return ""; } }, set: (k, v) => { try { sessionStorage.setItem(k, v); } catch {} }, del: k => { try { sessionStorage.removeItem(k); } catch {} } };
+  const ls = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+
+  // ---------- libelles ----------
+  const STAGE = { recon: "Reconnaissance", exploitation: "Exploitation", credential_access: "Accès identifiants", execution: "Exécution" };
+  const STAGE_ORD = { recon: 0, exploitation: 1, credential_access: 2, execution: 3 };
+  const TYPE = { block_ip: "Blocage IP", isolate_host: "Isolation hôte", collect_evidence: "Collecte de preuves", open_ticket: "Ticket", notify: "Notification" };
+  const AST = { dry_run: "Simulée", done: "Exécutée", failed: "Échec", pending_approval: "En attente", rejected: "Rejetée", blocked_by_guard: "Refusée (garde-fou)", new: "Nouvelle" };
+  const IST = { open: "Ouvert", authorized: "Autorisé (pentest)", closed: "Clos", false_positive: "Faux positif" };
+  const SEV_ORD = { P1: 3, P2: 2, P3: 1 };
+  const SEVL = { P1: "Élevée", P2: "Moyenne", P3: "Faible" };
+  // Tactiques MITRE ATT&CK deduites des techniques
+  const TACTIC = { T1595: "Reconnaissance", T1590: "Reconnaissance", T1593: "Reconnaissance", T1190: "Accès initial", T1110: "Accès aux identifiants", T1003: "Accès aux identifiants", T1059: "Exécution", T1036: "Évasion de la défense", T1021: "Mouvement latéral", T1588: "Développement de ressources" };
+  const tactics = i => [...new Set((i.techniques || []).map(t => TACTIC[t.split(".")[0]]).filter(Boolean))];
+
+  // ---------- formats ----------
+  const pad = n => String(n).padStart(2, "0");
+  const ts = t => { if (!t) return ""; const d = new Date(t * 1000); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`; };
+  const sev = s => `<span class="sev sev-${esc(s)}" title="${esc(s)}">${esc(SEVL[s] || s)}</span>`;
+  const ist = s => `<span class="st st-${esc(s)}">${esc(IST[s] || s)}</span>`;
+  const ast = s => `<span class="st st-${esc(s)}">${esc(AST[s] || s)}</span>`;
+  const who = i => i.source_ip || (i.key || "").replace(/^host:/, "");
+  const isActive = i => i.status === "open" || i.status === "authorized";
+  const title = i => {
+    if (i.kind === "host") return `Indicateur de compromission sur ${who(i)} : ${(Object.keys(i.indicators || {})[0] || "").replace(/^IOC hote: /, "")}`;
+    const what = i.artex_confirmed ? "Campagne ARTEX" : "Activité offensive automatisée";
+    const php = Object.keys(i.indicators || {}).some(k => k.includes("php2shell"));
+    const tail = i.severity === "P1" ? (php ? "LFI vers exécution de code (php2shell) réussie" : "compromission probable")
+      : i.stage === "credential_access" ? "attaque par force brute" : i.stage === "exploitation" ? "tentatives d'exploitation web" : "reconnaissance et énumération";
+    return `${what} depuis ${who(i)} : ${tail}`;
   };
 
-  const STAGES = [["recon", "Reconnaissance"], ["exploitation", "Exploitation"], ["credential_access", "Identifiants"], ["execution", "Exécution"]];
-  const STAGE_LBL = Object.fromEntries(STAGES);
-  const STAGE_COL = { recon: "var(--p3)", exploitation: "var(--p2)", credential_access: "var(--violet)", execution: "var(--p1)" };
-  const TYPE = { block_ip: "Blocage d'IP", isolate_host: "Isolation de serveur", collect_evidence: "Collecte de preuves", open_ticket: "Ticket", notify: "Notification" };
-  const ACT_ST = {
-    dry_run: ["Simulée", "b-info"], done: ["Exécutée", "b-ok"], failed: ["Échec", "b-bad"],
-    pending_approval: ["En attente", "b-warn"], rejected: ["Rejetée", "b-mute"], blocked_by_guard: ["Refusée par garde-fou", "b-mute"], new: ["Nouvelle", "b-mute"],
-  };
-  const INC_ST = { open: ["Ouvert", "b-warn"], authorized: ["Pentest autorisé", "b-info"], closed: ["Clos", "b-mute"], false_positive: ["Faux positif", "b-mute"] };
-  const SEV_COL = { P1: "var(--p1)", P2: "var(--p2)", P3: "var(--p3)" };
-  const VIEWS = {
-    overview: ["Vue d'ensemble", "Situation des campagnes ARTEX détectées"],
-    incidents: ["Incidents", "Un incident par source d'attaque, qualifié P3 → P1"],
-    approvals: ["Approbations", "Actions sensibles qui attendent une décision humaine"],
-    actions: ["Actions", "Tout ce que la plateforme a fait ou aurait fait"],
-    audit: ["Journal d'audit", "Chaque décision du moteur, des garde-fous et des analystes"],
-  };
+  // ---------- etat ----------
+  const S = { health: null, inc: [], act: [], audit: [], tables: {}, timer: null, route: "overview", arg: null, tab: "summary", incQ: "", incRange: "all", incStatus: "active" };
 
-  const S = { health: null, incidents: [], actions: [], audit: [], view: "overview", incF: "open", actF: "all", q: "", openId: null };
+  function toast(m, bad) { const t = $("#toast"); t.textContent = m; t.className = bad ? "bad" : ""; clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.add("hidden"), 4000); }
 
-  const fmt = (t) => t ? new Date(t * 1000).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
-  const ago = (t) => {
-    if (!t) return "";
-    const d = Math.max(0, Date.now() / 1000 - t);
-    if (d < 60) return "à l'instant"; if (d < 3600) return `il y a ${Math.floor(d / 60)} min`;
-    if (d < 86400) return `il y a ${Math.floor(d / 3600)} h`; return fmt(t);
-  };
-  const sev = (s) => `<span class="badge sev-${esc(s)}">${esc(s)}</span>`;
-  const artex = (i) => i.artex_confirmed ? ` <span class="badge b-artex">ARTEX</span>` : "";
-  const pill = (map, k) => { const [l, c] = map[k] || [k, "b-mute"]; return `<span class="badge ${c}">${esc(l)}</span>`; };
-  const who = (i) => i.source_ip || (i.key || "").replace(/^host:/, "");
-  const scoreBar = (s) => { const p = Math.min(100, Math.round(s / 4)); const c = s >= 100 ? "var(--p1)" : s >= 60 ? "var(--p2)" : "var(--p3)";
-    return `<div class="score"><span class="mono">${esc(s)}</span><span class="bar"><i style="width:${p}%;background:${c}"></i></span></div>`; };
-  const chain = (st) => { const idx = STAGES.findIndex(([k]) => k === st);
-    return `<div class="chain" aria-label="${esc(STAGE_LBL[st] || st)}">${STAGES.map(([k], i) => `<span class="${i <= idx ? "on" : ""}" style="${i <= idx ? `background:${STAGE_COL[st]}` : ""}"></span>`).join("")}</div><div class="chain-lbl">${esc(STAGE_LBL[st] || st)}</div>`; };
-  const active = (i) => i.status === "open" || i.status === "authorized";
-
-  function toast(msg, err = false) {
-    const t = $("#toast"); t.textContent = msg; t.className = "toast" + (err ? " err" : "");
-    clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.add("hidden"), 3500);
-  }
-
-  async function api(path, opts = {}) {
-    const r = await fetch(path, { ...opts, headers: { "X-API-Key": store.get("soar_key"), "X-SOAR-User": store.get("soar_user") || "dashboard", "Content-Type": "application/json" } });
-    if (r.status === 401) { showLogin("Clé API refusée."); throw new Error("Clé API refusée"); }
+  async function api(path, opt = {}) {
+    const r = await fetch(path, { ...opt, headers: { "X-API-Key": ss.get("soar_key"), "X-SOAR-User": ss.get("soar_user") || "dashboard", "Content-Type": "application/json" } });
+    if (r.status === 401) { logout("Clé API refusée."); throw new Error("401"); }
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `HTTP ${r.status}`);
     return r.json();
   }
 
-  // ---------- rendu ----------
-  function renderSide() {
-    const h = S.health; if (!h) return;
-    $("#modeBox").innerHTML = h.mode === "enforce"
-      ? `<span class="badge b-bad">ENFORCE · actions réelles</span>`
-      : `<span class="badge b-ok">DRY-RUN · simulation</span>`;
-    $("#connList").innerHTML = Object.entries(h.connectors).map(([n, c]) =>
-      `<div class="conn"><span class="mono">${esc(n)}</span>${c.dry_run ? `<span class="badge b-info">simulé</span>` : `<span class="badge b-ok">actif</span>`}</div>`).join("");
-    const pend = S.actions.filter(a => a.status === "pending_approval").length;
-    const openN = S.incidents.filter(i => i.status === "open").length;
-    $("#navApp").textContent = pend; $("#navApp").classList.toggle("hidden", !pend);
-    $("#navInc").textContent = openN; $("#navInc").classList.toggle("hidden", !openN);
-    $("#navInc").style.background = S.incidents.some(i => i.status === "open" && i.severity === "P1") ? "var(--p1)" : "var(--p2)";
-  }
-
-  function renderOverview() {
-    const act = S.incidents.filter(active);
-    const p1 = act.filter(i => i.severity === "P1").length;
-    const pend = S.actions.filter(a => a.status === "pending_approval");
-    const blocked = new Set(S.actions.filter(a => a.type === "block_ip" && (a.status === "done" || a.status === "dry_run")).map(a => a.result?.data?.ip).filter(Boolean));
-    const real = S.actions.some(a => a.type === "block_ip" && a.status === "done");
-    const artexN = act.filter(i => i.artex_confirmed).length;
-    const k = [
-      ["Incidents actifs", act.length, `${artexN} avec ARTEX confirmé`, "var(--accent)"],
-      ["Critiques (P1)", p1, p1 ? "compromission probable" : "aucune compromission", "var(--p1)"],
-      ["En attente", pend.length, pend.length ? "décision requise" : "rien à approuver", "var(--p2)"],
-      [real ? "IP bloquées" : "IP à bloquer", blocked.size, real ? "sur le pare-feu / WAF" : "simulées (dry-run)", "var(--ok)"],
-    ];
-    $("#kpis").innerHTML = k.map(([l, v, n, c]) => `<div class="panel kpi" style="--kc:${c}"><div class="label">${l}</div><div class="value" style="color:${c}">${v}</div><div class="note">${n}</div></div>`).join("");
-
-    $("#killchain").innerHTML = STAGES.map(([key, lbl], i) => {
-      const n = act.filter(x => x.stage === key).length;
-      return `<div class="kc" style="--kcc:${STAGE_COL[key]}"><div class="step">Étape ${i + 1}</div><div class="n">${n}</div><div class="t">${lbl}</div></div>`;
+  // ---------- tableau generique (tri + pagination) ----------
+  // cols: [{k, label, sort?: row=>value, render: row=>html, cls?, num?}]
+  function table(id, cols, rows, opts = {}) {
+    const st = S.tables[id] ||= { k: opts.sortKey || null, dir: opts.sortDir || "desc", page: 0, size: opts.size || 25 };
+    const col = cols.find(c => c.k === st.k && c.sort);
+    let data = rows.slice();
+    if (col) data.sort((a, b) => { const x = col.sort(a), y = col.sort(b); return (x > y ? 1 : x < y ? -1 : 0) * (st.dir === "asc" ? 1 : -1); });
+    const pages = Math.max(1, Math.ceil(data.length / st.size));
+    st.page = Math.min(st.page, pages - 1);
+    const slice = data.slice(st.page * st.size, (st.page + 1) * st.size);
+    const head = cols.map(c => {
+      const ar = c.k === st.k ? (st.dir === "asc" ? "▲" : "▼") : (c.sort ? "↕" : "");
+      return `<th class="${c.sort ? "sort " : ""}${c.num ? "num " : ""}${c.cls || ""}" ${c.sort ? `tabindex="0" data-t="${id}" data-k="${c.k}"` : ""}>${c.label}${ar ? `<span class="ar">${ar}</span>` : ""}</th>`;
     }).join("");
-    const tot = act.length || 1;
-    const counts = ["P1", "P2", "P3"].map(s => [s, act.filter(i => i.severity === s).length]);
-    $("#distrib").innerHTML = act.length ? counts.map(([s, n]) => n ? `<span title="${s} : ${n}" style="width:${n / tot * 100}%;background:${SEV_COL[s]}"></span>` : "").join("") : "";
-    $("#legend").innerHTML = counts.map(([s, n]) => `<span><i style="background:${SEV_COL[s]}"></i>${s} · ${n}</span>`).join("");
-
-    $("#pendHint").textContent = pend.length ? `${pend.length} action(s)` : "";
-    $("#pendingOverview").innerHTML = pend.length ? pend.slice(0, 4).map(approvalCard).join("") : `<div class="empty">Aucune action en attente.<br><span class="muted">Les isolations de serveur apparaîtront ici.</span></div>`;
-
-    const recent = [...S.incidents].sort((a, b) => b.last_seen - a.last_seen).slice(0, 6);
-    $("#recent").innerHTML = recent.length ? recent.map(i => incRow(i)).join("") : `<tr><td colspan="7" class="empty">Aucun incident pour l'instant. Envoyez un journal pour commencer (voir le README).</td></tr>`;
+    const body = slice.length ? slice.map(r => `<tr${opts.link ? ` class="rowlink${opts.selected && opts.selected(r) ? " selected" : ""}" tabindex="0" data-href="${esc(opts.link(r))}"` : ""}>${cols.map(c => `<td class="${c.num ? "num " : ""}${c.cls || ""}">${c.render(r)}</td>`).join("")}</tr>`).join("")
+      : `<tr class="empty"><td colspan="${cols.length}">${opts.empty || "Aucun résultat."}</td></tr>`;
+    const from = data.length ? st.page * st.size + 1 : 0, to = Math.min(data.length, (st.page + 1) * st.size);
+    const pager = opts.nopager ? "" : `<div class="pager">
+      <span>Lignes</span><select data-size="${id}" aria-label="Lignes par page">${[10, 25, 50, 100].map(n => `<option ${n === st.size ? "selected" : ""}>${n}</option>`).join("")}</select>
+      <span>${from}–${to} sur ${data.length}</span>
+      <button class="btn" data-pg="${id}" data-d="-1" ${st.page === 0 ? "disabled" : ""} aria-label="Page précédente">‹</button>
+      <button class="btn" data-pg="${id}" data-d="1" ${st.page >= pages - 1 ? "disabled" : ""} aria-label="Page suivante">›</button></div>`;
+    return `<div class="tw"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>${pager}`;
   }
 
-  function incRow(i, full = false) {
-    const inds = Object.keys(i.indicators || {});
-    return `<tr class="click" tabindex="0" data-inc="${esc(i.id)}">
-      <td class="nowrap">${sev(i.severity)}${artex(i)}</td>
-      <td><div class="mono ip">${esc(who(i))}</div><div class="muted" style="font-size:12px">${i.kind === "host" ? "IOC sur serveur" : esc(i.events) + " événements"}</div></td>
-      <td class="hide-sm fg2">${esc((i.targets || []).join(", ") || "—")}</td>
-      <td>${scoreBar(i.score)}</td>
-      <td class="hide-sm" style="min-width:130px">${chain(i.stage)}</td>
-      ${full ? `<td class="hide-sm"><div class="trunc fg2" title="${esc(inds.join(" ; "))}">${esc(inds.slice(0, 3).join(" · "))}${inds.length > 3 ? ` <span class="muted">+${inds.length - 3}</span>` : ""}</div></td>` : ""}
-      <td>${pill(INC_ST, i.status)}</td>
-      <td class="hide-sm muted nowrap" title="${esc(fmt(i.last_seen))}">${esc(ago(i.last_seen))}</td></tr>`;
+  // ---------- colonnes ----------
+  const incCols = [
+    { k: "sev", label: "Gravité", sort: i => SEV_ORD[i.severity] * 1e6 + i.score, render: i => sev(i.severity), cls: "nw" },
+    { k: "id", label: "ID de l'incident", sort: i => i.id, render: i => `<span class="mono">${esc(i.id)}</span>`, cls: "nw hide-sm" },
+    { k: "title", label: "Titre", sort: i => title(i), render: i => `<div class="ttl-cell"><a href="#/incident/${esc(i.id)}">${esc(title(i))}</a>${i.artex_confirmed ? ` <span class="tag artex">ARTEX</span>` : ""}</div>` },
+    { k: "tac", label: "Tactiques", render: i => `<div class="tactics">${tactics(i).map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div>`, cls: "hide-sm hide-pane" },
+    { k: "src", label: "Entité source", sort: i => who(i), render: i => `<span class="mono">${esc(who(i))}</span>`, cls: "nw" },
+    { k: "tgt", label: "Hôte(s) ciblé(s)", sort: i => (i.targets || []).join(","), render: i => `<span class="mono t2">${esc((i.targets || []).join(", ") || "—")}</span>`, cls: "nw hide-sm hide-pane" },
+    { k: "score", label: "Score", num: true, sort: i => i.score, render: i => esc(i.score), cls: "hide-sm hide-pane" },
+    { k: "status", label: "Statut", sort: i => i.status, render: i => ist(i.status), cls: "nw" },
+    { k: "first", label: "Créé (UTC)", sort: i => i.first_seen, render: i => `<span class="t2 nw">${ts(i.first_seen)}</span>`, cls: "nw hide-sm hide-pane" },
+    { k: "last", label: "Dernière mise à jour (UTC)", sort: i => i.last_seen, render: i => `<span class="t2 nw">${ts(i.last_seen)}</span>`, cls: "nw" },
+  ];
+  const detailHtml = a => { const c = a.result?.commands || []; return `${esc(a.result?.detail || "")}${c.length ? `<code class="cmd">${c.map(x => "$ " + x.map(esc).join(" ")).join("\n")}</code>` : ""}`; };
+  const actCols = (withInc = true) => [
+    { k: "t", label: "Horodatage (UTC)", sort: a => a.executed || a.created, render: a => `<span class="mono t2">${ts(a.executed || a.created)}</span>`, cls: "nw" },
+    { k: "id", label: "ID", sort: a => a.id, render: a => `<span class="mono t2">${esc(a.id)}</span>`, cls: "nw hide-sm" },
+    ...(withInc ? [{ k: "inc", label: "Incident", sort: a => a.incident_id, render: a => `<a class="mono" href="#/incident/${esc(a.incident_id)}">${esc(a.incident_id)}</a>`, cls: "nw" }] : []),
+    { k: "type", label: "Action", sort: a => a.type, render: a => esc(TYPE[a.type] || a.type), cls: "nw" },
+    { k: "conn", label: "Connecteur", sort: a => a.connector, render: a => `<span class="mono">${esc(a.connector)}</span>`, cls: "nw hide-sm" },
+    { k: "pb", label: "Playbook", sort: a => a.playbook, render: a => `<span class="mono t2">${esc(a.playbook)}</span>`, cls: "nw hide-sm" },
+    { k: "st", label: "Statut", sort: a => a.status, render: a => ast(a.status), cls: "nw" },
+    { k: "d", label: "Détail", render: a => `<div class="t2" style="min-width:260px">${detailHtml(a)}</div>` },
+  ];
+
+  // ---------- vues ----------
+  function vOverview() {
+    const act = S.inc.filter(isActive);
+    const pend = S.act.filter(a => a.status === "pending_approval");
+    const ips = new Set(S.act.filter(a => a.type === "block_ip" && (a.status === "done" || a.status === "dry_run")).map(a => a.result?.data?.ip).filter(Boolean));
+    const stats = [
+      [act.length, "Incidents actifs"], [act.filter(i => i.severity === "P1").length, "Gravité élevée"], [act.filter(i => i.severity === "P2").length, "Gravité moyenne"],
+      [act.filter(i => i.artex_confirmed).length, "ARTEX confirmé"], [pend.length, "Approbations en attente"], [ips.size, S.health?.mode === "enforce" ? "IP bloquées" : "IP à bloquer (simulé)"],
+    ];
+    // Histogramme : evenements de reponse par heure sur les 24 dernieres heures
+    const now = Date.now() / 1000, hours = [...Array(24)].map((_, i) => ({ t: Math.floor(now / 3600 - 23 + i) * 3600, n: 0 }));
+    S.act.forEach(a => { const t = a.executed || a.created; const h = hours.find(x => t >= x.t && t < x.t + 3600); if (h) h.n++; });
+    const max = Math.max(1, ...hours.map(h => h.n)), W = 1100, H = 130, bw = (W - 30) / 24;
+    const svg = `<svg class="hist" viewBox="0 0 ${W} ${H}" role="img" aria-label="Actions de réponse par heure">
+      <line x1="28" y1="${H - 18}" x2="${W}" y2="${H - 18}"/><text x="0" y="12">${max}</text><text x="0" y="${H - 20}">0</text>
+      ${hours.map((h, i) => `<rect class="b" x="${30 + i * bw + 1}" y="${H - 18 - (h.n / max) * (H - 30)}" width="${bw - 2}" height="${(h.n / max) * (H - 30)}"><title>${ts(h.t).slice(11, 16)} UTC : ${h.n}</title></rect>${i % 4 === 0 ? `<text x="${30 + i * bw}" y="${H - 4}">${ts(h.t).slice(11, 16)}</text>` : ""}`).join("")}</svg>`;
+    // Top sources / top indicateurs
+    const topSrc = [...act].sort((a, b) => b.score - a.score).slice(0, 8);
+    const indCount = {}; act.forEach(i => Object.keys(i.indicators || {}).forEach(k => indCount[k] = (indCount[k] || 0) + 1));
+    const topInd = Object.entries(indCount).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    return `<div class="title-row"><h1>Synthèse</h1><span class="hint">Données au ${ts(now)} UTC</span></div>
+      ${S.health?.mode !== "enforce" ? `<div class="notice">Mode <b>dry-run</b> : aucun blocage ni isolation n'est appliqué. Les commandes prévues sont journalisées dans le journal des actions.</div>` : ""}
+      <div class="stats">${stats.map(([v, l]) => `<div class="stat"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("")}</div>
+      <div class="box" style="margin-top:12px"><div class="box-h">Actions de réponse <span class="sub">par heure, 24 dernières heures (UTC)</span></div><div class="box-b">${svg}</div></div>
+      <div class="row" style="margin-top:12px">
+        <div class="box"><div class="box-h">Sources les plus actives <span class="sub">incidents actifs, par score</span></div>${table("topsrc", [
+          { k: "s", label: "Sév.", render: i => sev(i.severity) }, { k: "src", label: "Source / hôte", render: i => `<a class="mono" href="#/incident/${esc(i.id)}">${esc(who(i))}</a>${i.artex_confirmed ? ` <span class="tag artex">ARTEX</span>` : ""}` },
+          { k: "sc", label: "Score", num: true, render: i => esc(i.score) }, { k: "st", label: "Étape", render: i => esc(STAGE[i.stage]), cls: "nw" }], topSrc, { nopager: true, empty: "Aucun incident actif." })}</div>
+        <div class="box"><div class="box-h">Indicateurs les plus fréquents <span class="sub">nombre d'incidents actifs</span></div>${table("topind", [
+          { k: "l", label: "Indicateur", render: r => esc(r[0]) }, { k: "n", label: "Incidents", num: true, render: r => r[1] }], topInd, { nopager: true, empty: "Aucun indicateur." })}</div>
+      </div>
+      <div class="box" style="margin-top:12px"><div class="box-h">File d'approbation <span class="sub">${pend.length} en attente</span></div>${approvalTable(pend.slice(0, 5), true)}</div>`;
   }
 
+  function parseQuery(q) {
+    // syntaxe : texte libre et filtres champ:valeur (ip:, sev:, stage:, target:, status:)
+    const f = { text: [] };
+    q.trim().split(/\s+/).filter(Boolean).forEach(tok => { const m = tok.match(/^(ip|src|sev|severity|stage|target|cible|status|statut):(.+)$/i); if (m) f[m[1].toLowerCase()] = m[2].toLowerCase(); else f.text.push(tok.toLowerCase()); });
+    return f;
+  }
   function filteredIncidents() {
-    const q = S.q.trim().toLowerCase();
-    return [...S.incidents].sort((a, b) => b.last_seen - a.last_seen).filter(i => {
-      const f = S.incF;
-      if (f === "open" && !active(i)) return false;
-      if (f === "closed" && active(i)) return false;
-      if (["P1", "P2", "P3"].includes(f) && (i.severity !== f || !active(i))) return false;
-      if (f === "artex" && !i.artex_confirmed) return false;
-      if (!q) return true;
-      return [who(i), i.id, ...(i.targets || []), ...Object.keys(i.indicators || {}), ...(i.techniques || [])].join(" ").toLowerCase().includes(q);
+    const f = parseQuery(S.incQ), now = Date.now() / 1000, range = { "1h": 3600, "24h": 86400, "7d": 604800, "30d": 2592000 }[S.incRange];
+    return S.inc.filter(i => {
+      if (S.incStatus === "active" && !isActive(i)) return false;
+      if (S.incStatus === "closed" && isActive(i)) return false;
+      if (S.incSev && S.incSev !== "all" && i.severity !== S.incSev) return false;
+      if (range && now - i.last_seen > range) return false;
+      const ip = f.ip || f.src; if (ip && !who(i).toLowerCase().includes(ip)) return false;
+      const sv = f.sev || f.severity; if (sv && i.severity.toLowerCase() !== sv) return false;
+      if (f.stage && !(i.stage + " " + (STAGE[i.stage] || "")).toLowerCase().includes(f.stage)) return false;
+      const tg = f.target || f.cible; if (tg && !(i.targets || []).join(" ").toLowerCase().includes(tg)) return false;
+      const sts = f.status || f.statut; if (sts && !(i.status + " " + IST[i.status]).toLowerCase().includes(sts)) return false;
+      const hay = [i.id, title(i), who(i), ...(i.targets || []), ...Object.keys(i.indicators || {}), ...(i.techniques || [])].join(" ").toLowerCase();
+      return f.text.every(t => hay.includes(t));
     });
   }
+  const pillSel = (id, label, cur, opts) => `<span class="pill">${label} : <select id="${id}" aria-label="${label}">${opts.map(([v, l]) => `<option value="${v}" ${cur === v ? "selected" : ""}>${l}</option>`).join("")}</select></span>`;
 
-  function renderIncidents() {
+  function vIncidents() {
     const rows = filteredIncidents();
-    $("#incTable").innerHTML = rows.length ? rows.map(i => incRow(i, true)).join("") : `<tr><td colspan="8" class="empty">Aucun incident ne correspond.</td></tr>`;
-  }
-
-  function approvalCard(a) {
-    const inc = S.incidents.find(i => i.id === a.incident_id);
-    const what = a.type === "isolate_host" ? `Isoler le serveur <span class="mono">${esc(a.params?.host || "?")}</span>`
-      : a.type === "block_ip" ? `Bloquer <span class="mono">${esc(inc?.source_ip || "?")}</span>` : esc(TYPE[a.type] || a.type);
-    return `<div class="approval">
-      <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
-      <div class="body"><div class="title">${what}</div>
-        <div class="muted" style="font-size:12.5px">${inc ? `${sev(inc.severity)}${artex(inc)} incident <a href="#" data-open="${esc(inc.id)}">${esc(inc.id)}</a> · source <span class="mono">${esc(who(inc))}</span>` : esc(a.incident_id)}</div>
-        <div class="fg2" style="font-size:12.5px;margin-top:4px">${esc(a.result?.detail || "")} · playbook <span class="mono">${esc(a.playbook)}</span></div></div>
-      <div class="actions"><button class="btn ok sm" data-approve="${esc(a.id)}">Approuver</button><button class="btn danger sm" data-reject="${esc(a.id)}">Rejeter</button></div></div>`;
-  }
-
-  function renderApprovals() {
-    const pend = S.actions.filter(a => a.status === "pending_approval");
-    $("#pendingFull").innerHTML = pend.length ? pend.map(approvalCard).join("") : `<div class="empty">Aucune action en attente de décision.</div>`;
-  }
-
-  const detail = (a) => {
-    const cmds = a.result?.commands || [];
-    return `${esc(a.result?.detail || "")}${cmds.length ? `<code class="cmd">${cmds.map(c => "$ " + c.map(esc).join(" ")).join("\n")}</code>` : ""}`;
-  };
-
-  function renderActions() {
-    const rows = S.actions.filter(a => S.actF === "all" || a.status === S.actF);
-    $("#actTable").innerHTML = rows.length ? rows.slice(0, 300).map(a => `<tr>
-      <td class="muted nowrap">${esc(fmt(a.executed || a.created))}</td>
-      <td class="nowrap"><div style="font-weight:600">${esc(TYPE[a.type] || a.type)}</div><a href="#" class="mono" style="font-size:12px" data-open="${esc(a.incident_id)}">${esc(a.incident_id)}</a></td>
-      <td class="hide-sm mono fg2">${esc(a.connector)}</td>
-      <td>${pill(ACT_ST, a.status)}</td>
-      <td class="fg2" style="min-width:260px">${detail(a)}</td></tr>`).join("") : `<tr><td colspan="5" class="empty">Aucune action.</td></tr>`;
-  }
-
-  function renderAudit() {
-    $("#auditTable").innerHTML = S.audit.length ? S.audit.map(e => `<tr>
-      <td class="muted nowrap">${esc(fmt(e.ts))}</td><td class="mono">${esc(e.actor)}</td><td>${esc(e.event)}</td>
-      <td class="fg2"><code>${esc(JSON.stringify(e.data))}</code></td></tr>`).join("") : `<tr><td colspan="4" class="empty">Journal vide.</td></tr>`;
-  }
-
-  async function openIncident(id) {
-    S.openId = id;
-    let inc;
-    try { inc = await api(`/api/v1/incidents/${encodeURIComponent(id)}`); } catch (e) { return toast(e.message, true); }
-    const acts = (inc.actions || []).sort((a, b) => (a.executed || a.created) - (b.executed || b.created));
-    $("#dBadges").innerHTML = `${sev(inc.severity)}${artex(inc)} ${pill(INC_ST, inc.status)}`;
-    $("#dTitle").textContent = who(inc);
-    $("#dSub").textContent = `${inc.id} · ${inc.kind === "host" ? "IOC sur serveur" : "source d'attaque"} · du ${fmt(inc.first_seen)} au ${fmt(inc.last_seen)}`;
-    const inds = Object.entries(inc.indicators || {}).sort((a, b) => b[1] - a[1]);
-    const succ = new Set(inc.successful || []);
-    const tlColor = { done: "var(--ok)", dry_run: "var(--accent)", failed: "var(--p1)", pending_approval: "var(--p2)" };
-    $("#dBody").innerHTML = `
-      <div class="facts">
-        <div class="fact"><div class="k">Score</div><div class="v">${scoreBar(inc.score)}</div></div>
-        <div class="fact"><div class="k">Étape atteinte</div><div class="v">${chain(inc.stage)}</div></div>
-        <div class="fact"><div class="k">Événements</div><div class="v">${esc(inc.events)}</div></div>
-        <div class="fact"><div class="k">Serveurs ciblés</div><div class="v mono">${esc((inc.targets || []).join(", ") || "—")}</div></div>
-        <div class="fact"><div class="k">Engagement</div><div class="v mono">${esc(inc.engagement || "—")}</div></div>
-        <div class="fact"><div class="k">ATT&amp;CK</div><div class="v chips">${(inc.techniques || []).map(t => `<span class="badge b-mute mono">${esc(t)}</span>`).join("") || "—"}</div></div>
+    const open = S.inc.filter(isActive), sevN = s => open.filter(i => i.severity === s).length, tot = open.length || 1;
+    const sel = S.sel && S.inc.find(i => i.id === S.sel);
+    const opts = { sortKey: "last", link: i => `#/incidents?sel=${i.id}`, selected: i => i.id === S.sel, empty: S.inc.length ? "Aucun incident ne correspond aux filtres." : "Aucun incident. Envoyez des journaux à /api/v1/ingest/access-log pour commencer." };
+    return `<div class="crumbs">ARTEX SOAR</div><div class="title-row"><h1>Incidents</h1></div>
+      <div class="cmdbar"><button class="btn" data-cmd="refresh"><span class="ico">⟳</span>Actualiser</button>
+        <button class="btn" data-cmd="last24"><span class="ico">◷</span>24 dernières heures</button>
+        <button class="btn" data-cmd="p1"><span class="ico">▲</span>Gravité élevée uniquement</button>
+        <button class="btn" data-cmd="reset"><span class="ico">✕</span>Réinitialiser les filtres</button></div>
+      <div class="summary">
+        <div class="cell"><div class="v">${open.length}</div><div class="l">Incidents ouverts</div></div>
+        <div class="cell"><div class="v">${open.filter(i => i.artex_confirmed).length}</div><div class="l">ARTEX confirmé</div></div>
+        <div class="cell"><div class="v">${S.act.filter(a => a.status === "pending_approval").length}</div><div class="l">Décisions en attente</div></div>
+        <div class="cell"><div class="l">Incidents ouverts par gravité</div>
+          <div class="sevbar">${["P1", "P2", "P3"].map(s => sevN(s) ? `<span style="width:${sevN(s) / tot * 100}%;background:var(${s === "P1" ? "--high" : s === "P2" ? "--med" : "--low"})" title="${SEVL[s]} : ${sevN(s)}"></span>` : "").join("")}</div>
+          <div class="sevleg">${["P1", "P2", "P3"].map(s => `<span><i style="background:var(${s === "P1" ? "--high" : s === "P2" ? "--med" : "--low"})"></i>${SEVL[s]}<b>${sevN(s)}</b></span>`).join("")}</div></div>
       </div>
-      <div><div class="sec-t">Indicateurs</div><div class="panel" style="padding:4px 14px">${inds.map(([l, n]) => `<div class="ind"><span>${esc(l)}${succ.has(l) ? ` <span class="badge b-bad">abouti</span>` : ""}</span><span class="mono muted">×${esc(n)}</span></div>`).join("") || `<div class="empty">—</div>`}</div></div>
-      <div><div class="sec-t">Réponse automatisée</div>${acts.length ? `<div class="timeline">${acts.map(a => `<div class="tl" style="--tlc:${tlColor[a.status] || "var(--muted)"}">
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><b>${esc(TYPE[a.type] || a.type)}</b>${pill(ACT_ST, a.status)}<span class="muted mono" style="font-size:12px">${esc(a.connector)} · ${esc(fmt(a.executed || a.created))}</span></div>
-          <div class="fg2" style="font-size:13px">${detail(a)}</div>
-          ${a.status === "pending_approval" ? `<div style="display:flex;gap:8px;margin-top:8px"><button class="btn ok sm" data-approve="${esc(a.id)}">Approuver</button><button class="btn danger sm" data-reject="${esc(a.id)}">Rejeter</button></div>` : ""}
-        </div>`).join("")}</div>` : `<div class="muted">Aucune action déclenchée.</div>`}</div>
-      ${(inc.samples || []).length ? `<div><div class="sec-t">Requêtes observées</div>${inc.samples.slice(0, 8).map(s => `<code class="sample">${esc(s)}</code>`).join("")}</div>` : ""}
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        ${active(inc) ? `<button class="btn" data-status="closed">Clore l'incident</button><button class="btn ghost" data-status="false_positive">Marquer faux positif</button>`
-                      : `<button class="btn" data-status="open">Rouvrir</button>`}
+      <div class="filters">
+        <input type="search" id="incQ" value="${esc(S.incQ)}" placeholder="Rechercher par ID, titre, IP ou indicateur (ex. ip:198.51.100.66)" aria-label="Rechercher">
+        ${pillSel("incSev", "Gravité", S.incSev || "all", [["all", "Toutes"], ["P1", "Élevée"], ["P2", "Moyenne"], ["P3", "Faible"]])}
+        ${pillSel("incStatus", "Statut", S.incStatus, [["active", "Ouvert"], ["all", "Tous"], ["closed", "Clos / faux positif"]])}
+        ${pillSel("incRange", "Période", S.incRange, [["1h", "Dernière heure"], ["24h", "24 dernières heures"], ["7d", "7 derniers jours"], ["30d", "30 derniers jours"], ["all", "Tout"]])}
+        <span class="hint">${rows.length} élément(s)</span>
+      </div>
+      <div class="split ${sel ? "with-pane" : ""}">
+        <div class="box">${table("inc", incCols, rows, opts)}</div>
+        ${sel ? preview(sel) : ""}
       </div>`;
-    document.body.classList.add("open");
-    $("#dClose").focus();
-  }
-  function closeDrawer() { document.body.classList.remove("open"); S.openId = null; }
-
-  function renderAll() {
-    renderSide();
-    ({ overview: renderOverview, incidents: renderIncidents, approvals: renderApprovals, actions: renderActions, audit: renderAudit })[S.view]();
   }
 
-  async function refresh() {
+  function preview(i) {
+    const acts = S.act.filter(a => a.incident_id === i.id);
+    const pend = acts.filter(a => a.status === "pending_approval");
+    const inds = Object.entries(i.indicators || {}).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    return `<aside class="pane" aria-label="Aperçu de l'incident">
+      <div class="pane-h"><div style="display:flex;gap:8px;align-items:center"><span class="mono t3">${esc(i.id)}</span><span class="spacer"></span><button class="btn" data-cmd="closepane" aria-label="Fermer l'aperçu">✕</button></div>
+        <div class="ttl">${esc(title(i))}</div>
+        <div class="meta" style="margin-top:8px"><div><div class="k">Gravité</div><div class="v">${sev(i.severity)}</div></div><div><div class="k">Statut</div><div class="v">${ist(i.status)}</div></div><div><div class="k">Score</div><div class="v">${esc(i.score)}</div></div></div>
+        <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap"><a class="btn primary" style="display:inline-flex;align-items:center;text-decoration:none" href="#/incident/${esc(i.id)}">Afficher tous les détails</a>
+        ${isActive(i) ? `<button class="btn" data-status="closed" data-id="${esc(i.id)}">Clore</button>` : `<button class="btn" data-status="open" data-id="${esc(i.id)}">Rouvrir</button>`}</div></div>
+      ${pend.length ? `<div class="pane-sec"><h3>Décision requise</h3>${pend.map(a => `<div style="margin-bottom:6px">${esc(TYPE[a.type])} <span class="mono">${esc(a.params?.host || i.source_ip || "")}</span><div style="margin-top:4px"><button class="btn primary" data-approve="${esc(a.id)}">Approuver</button> <button class="btn danger" data-reject="${esc(a.id)}">Rejeter</button></div></div>`).join("")}</div>` : ""}
+      <div class="pane-sec"><h3>Entités</h3><div class="meta"><div><div class="k">Adresse IP</div><div class="v mono">${esc(i.source_ip || "—")}</div></div><div><div class="k">Hôte(s)</div><div class="v mono">${esc((i.targets || []).join(", ") || "—")}</div></div><div><div class="k">Engagement</div><div class="v mono">${esc(i.engagement || "—")}</div></div></div></div>
+      <div class="pane-sec"><h3>Tactiques et techniques</h3><div class="tactics">${tactics(i).map(t => `<span class="tag">${esc(t)}</span>`).join("")} ${(i.techniques || []).map(t => `<span class="tag mono">${esc(t)}</span>`).join("")}</div></div>
+      <div class="pane-sec"><h3>Indicateurs principaux</h3>${inds.map(([l, n]) => `<div style="display:flex;justify-content:space-between;gap:8px;padding:2px 0"><span>${esc(l)}</span><span class="t3">${n}</span></div>`).join("")}</div>
+      <div class="pane-sec"><h3>Dernières actions</h3>${acts.slice(0, 5).map(a => `<div style="display:flex;justify-content:space-between;gap:8px;padding:2px 0"><span>${esc(TYPE[a.type] || a.type)} <span class="mono t3">${esc(a.connector)}</span></span>${ast(a.status)}</div>`).join("") || `<span class="t3">Aucune</span>`}</div>
+      <div class="pane-sec t3" style="border-bottom:0">Créé ${ts(i.first_seen)} UTC · mis à jour ${ts(i.last_seen)} UTC</div>
+    </aside>`;
+  }
+
+  function approvalTable(rows, compact) {
+    return table(compact ? "appc" : "app", [
+      { k: "t", label: "Demandée (UTC)", sort: a => a.created, render: a => `<span class="mono t2">${ts(a.created)}</span>`, cls: "nw" },
+      { k: "inc", label: "Incident", render: a => { const i = S.inc.find(x => x.id === a.incident_id); return `<a class="mono" href="#/incident/${esc(a.incident_id)}">${esc(a.incident_id)}</a>${i ? ` ${sev(i.severity)}` : ""}`; }, cls: "nw" },
+      { k: "type", label: "Action", render: a => esc(TYPE[a.type] || a.type), cls: "nw" },
+      { k: "p", label: "Cible", render: a => { const i = S.inc.find(x => x.id === a.incident_id); return `<span class="mono">${esc(a.params?.host || i?.source_ip || "—")}</span>`; } },
+      { k: "why", label: "Motif", render: a => `<span class="t2">${esc(a.result?.detail || "")}</span> <span class="mono t3">${esc(a.playbook)}</span>`, cls: "hide-sm" },
+      { k: "d", label: "Décision", render: a => `<span class="nw"><button class="btn primary" data-approve="${esc(a.id)}">Approuver</button> <button class="btn danger" data-reject="${esc(a.id)}">Rejeter</button></span>` },
+    ], rows, { sortKey: "t", nopager: compact, empty: "Aucune action en attente d'approbation." });
+  }
+  const vApprovals = () => { const p = S.act.filter(a => a.status === "pending_approval");
+    return `<div class="title-row"><h1>File d'approbation</h1><span class="hint">${p.length} en attente · une action approuvée reste simulée en mode dry-run</span></div><div class="box">${approvalTable(p, false)}</div>`; };
+
+  function vActions() {
+    const f = S.actStatus || "all";
+    const rows = S.act.filter(a => f === "all" || a.status === f);
+    return `<div class="title-row"><h1>Journal des actions</h1><span class="hint">${rows.length} action(s)</span></div>
+      <div class="box"><div class="toolbar"><label for="actStatus">Statut</label><select id="actStatus">${[["all", "Tous"], ...Object.entries(AST).filter(([k]) => k !== "new")].map(([v, l]) => `<option value="${v}" ${f === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+      ${table("act", actCols(), rows, { sortKey: "t", empty: "Aucune action enregistrée." })}</div>`;
+  }
+
+  function vAudit() {
+    return `<div class="title-row"><h1>Audit</h1><span class="hint">300 derniers événements</span></div><div class="box">${table("aud", [
+      { k: "t", label: "Horodatage (UTC)", sort: e => e.ts, render: e => `<span class="mono t2">${ts(e.ts)}</span>`, cls: "nw" },
+      { k: "a", label: "Acteur", sort: e => e.actor, render: e => `<span class="mono">${esc(e.actor)}</span>`, cls: "nw" },
+      { k: "e", label: "Événement", sort: e => e.event, render: e => `<span class="mono">${esc(e.event)}</span>`, cls: "nw" },
+      { k: "d", label: "Données", render: e => `<code class="t2">${esc(JSON.stringify(e.data))}</code>` }], S.audit, { sortKey: "t", size: 50, empty: "Journal d'audit vide." })}</div>`;
+  }
+
+  function vConnectors() {
+    const h = S.health || { connectors: {}, playbooks: [] };
+    return `<div class="title-row"><h1>Connecteurs &amp; playbooks</h1><span class="hint">configuration : config/soar.yml, config/playbooks.yml</span></div>
+      <div class="row">
+        <div class="box"><div class="box-h">Connecteurs</div>${table("conn", [
+          { k: "n", label: "Nom", render: r => `<span class="mono">${esc(r[0])}</span>` }, { k: "t", label: "Type", render: r => `<span class="mono t2">${esc(r[1].type)}</span>` },
+          { k: "m", label: "Exécution", render: r => r[1].dry_run ? `<span class="st st-dry_run">Simulation</span>` : `<span class="st st-done">Réelle</span>` }], Object.entries(h.connectors), { nopager: true })}</div>
+        <div class="box"><div class="box-h">Playbooks actifs <span class="sub">ordre d'évaluation</span></div>${table("pb", [
+          { k: "i", label: "#", num: true, render: r => r[0] + 1 }, { k: "n", label: "Nom", render: r => `<span class="mono">${esc(r[1])}</span>` }], h.playbooks.map((p, i) => [i, p]), { nopager: true, empty: "Aucun playbook." })}</div>
+      </div>
+      <div class="box" style="margin-top:12px"><div class="box-h">Instance</div><div class="kv">
+        <div>Version</div><div class="mono">${esc(h.version || "")}</div><div>Mode</div><div>${h.mode === "enforce" ? `<span class="mode-enf">ENFORCE</span> — les connecteurs non simulés agissent réellement` : `<span class="mode-dry">DRY-RUN</span> — aucune action perturbatrice n'est exécutée`}</div>
+        <div>Analyste</div><div class="mono">${esc(ss.get("soar_user") || "dashboard")}</div></div></div>`;
+  }
+
+  async function vIncident(id) {
+    let i; try { i = await api(`/api/v1/incidents/${encodeURIComponent(id)}`); } catch (e) { return `<div class="crumbs"><a href="#/incidents">Incidents</a> / ${esc(id)}</div><div class="notice">Incident introuvable : ${esc(e.message)}</div>`; }
+    const acts = i.actions || [], succ = new Set(i.successful || []);
+    const tabs = [["summary", "Vue d'ensemble"], ["indicators", `Indicateurs (${Object.keys(i.indicators || {}).length})`], ["response", `Réponse (${acts.length})`], ["events", `Requêtes (${(i.samples || []).length})`], ["json", "JSON"]];
+    let body = "";
+    if (S.tab === "summary") body = `<div class="kv">
+        <div>Identifiant</div><div class="mono">${esc(i.id)}</div>
+        <div>Gravité</div><div>${sev(i.severity)}</div>
+        <div>Statut</div><div>${ist(i.status)}</div>
+        <div>Type</div><div>${i.kind === "host" ? "IOC sur un serveur" : "Source d'attaque"}</div>
+        <div>Source / hôte</div><div class="mono">${esc(who(i))}</div>
+        <div>Cible(s)</div><div class="mono">${esc((i.targets || []).join(", ") || "—")}</div>
+        <div>ARTEX confirmé</div><div>${i.artex_confirmed ? `<span class="tag artex">Oui</span>` : "Non"}</div>
+        <div>Engagement</div><div class="mono">${esc(i.engagement || "—")}</div>
+        <div>Score</div><div>${esc(i.score)}</div>
+        <div>Étape atteinte</div><div>${esc(STAGE[i.stage] || i.stage)}</div>
+        <div>Techniques ATT&amp;CK</div><div>${(i.techniques || []).map(t => `<span class="tag mono">${esc(t)}</span>`).join(" ") || "—"}</div>
+        <div>Événements</div><div>${esc(i.events)}</div>
+        <div>Première vue</div><div class="mono">${ts(i.first_seen)} UTC</div>
+        <div>Dernière vue</div><div class="mono">${ts(i.last_seen)} UTC</div>
+        <div>Playbooks déclenchés</div><div class="mono t2">${esc([...new Set((i.fired || []).map(f => f.split("#")[0]))].join(", ") || "—")}</div></div>`;
+    else if (S.tab === "indicators") body = table("ind", [
+        { k: "l", label: "Indicateur", sort: r => r[0], render: r => esc(r[0]) },
+        { k: "s", label: "Résultat", sort: r => succ.has(r[0]) ? 1 : 0, render: r => succ.has(r[0]) ? `<span class="st st-failed">Abouti</span>` : `<span class="t3">Tentative</span>`, cls: "nw" },
+        { k: "n", label: "Occurrences", num: true, sort: r => r[1], render: r => r[1] }], Object.entries(i.indicators || {}), { sortKey: "n", nopager: true });
+    else if (S.tab === "response") body = table("iact", actCols(false), acts, { sortKey: "t", sortDir: "asc", nopager: true, empty: "Aucune action déclenchée." });
+    else if (S.tab === "events") body = (i.samples || []).length ? `<pre>${i.samples.map(esc).join("\n")}</pre>` : `<div class="box-b t3">Aucune requête échantillonnée.</div>`;
+    else body = `<pre>${esc(JSON.stringify({ ...i, actions: undefined }, null, 2))}</pre>`;
+    const pend = acts.filter(a => a.status === "pending_approval");
+    return `<div class="crumbs"><a href="#/incidents">Incidents</a> &rsaquo; <span class="mono">${esc(i.id)}</span></div>
+      <div class="title-row"><h1>${esc(title(i))}</h1></div>
+      <div class="cmdbar">${isActive(i) ? `<button class="btn" data-status="closed" data-id="${esc(i.id)}"><span class="ico">✓</span>Clore l'incident</button><button class="btn" data-status="false_positive" data-id="${esc(i.id)}"><span class="ico">⊘</span>Marquer comme faux positif</button>` : `<button class="btn" data-status="open" data-id="${esc(i.id)}"><span class="ico">↺</span>Rouvrir</button>`}
+        <button class="btn" data-cmd="refresh"><span class="ico">⟳</span>Actualiser</button></div>
+      <div class="incpage">
+        <div class="box">
+          <div class="pane-sec"><div class="meta"><div><div class="k">Gravité</div><div class="v">${sev(i.severity)}</div></div><div><div class="k">Statut</div><div class="v">${ist(i.status)}</div></div><div><div class="k">Score</div><div class="v">${esc(i.score)}</div></div></div></div>
+          <div class="pane-sec"><h3>Détection</h3><div>${i.artex_confirmed ? `<span class="tag artex">ARTEX confirmé</span> ` : ""}Étape atteinte : <b>${esc(STAGE[i.stage] || i.stage)}</b><br>${esc(i.events)} événement(s) corrélé(s)</div></div>
+          <div class="pane-sec"><h3>Entités</h3><div class="meta" style="grid-template-columns:1fr 1fr"><div><div class="k">Adresse IP</div><div class="v mono">${esc(i.source_ip || "—")}</div></div><div><div class="k">Hôte(s)</div><div class="v mono">${esc((i.targets || []).join(", ") || "—")}</div></div></div></div>
+          <div class="pane-sec"><h3>Tactiques et techniques</h3><div class="tactics">${tactics(i).map(t => `<span class="tag">${esc(t)}</span>`).join("")} ${(i.techniques || []).map(t => `<span class="tag mono">${esc(t)}</span>`).join("")}</div></div>
+          <div class="pane-sec t3" style="border-bottom:0">Créé ${ts(i.first_seen)} UTC<br>Mis à jour ${ts(i.last_seen)} UTC</div>
+        </div>
+        <div>
+          ${pend.length ? `<div class="box" style="margin-bottom:12px"><div class="box-h">Décision requise</div>${approvalTable(pend, true)}</div>` : ""}
+          <div class="box"><div class="tabs">${tabs.map(([k, l]) => `<a href="#" data-tab="${k}" class="${S.tab === k ? "on" : ""}">${l}</a>`).join("")}</div>${body}</div>
+        </div>
+      </div>`;
+  }
+
+  // ---------- routage / rendu ----------
+  async function render() {
+    const [path, qs] = location.hash.replace(/^#\//, "").split("?");
+    const h = path.split("/");
+    S.route = h[0] || "overview"; S.arg = h[1] ? decodeURIComponent(h[1]) : null;
+    S.sel = S.route === "incidents" ? new URLSearchParams(qs || "").get("sel") : null;
+    document.querySelectorAll("#nav a").forEach(a => a.classList.toggle("active", a.dataset.r === (S.route === "incident" ? "incidents" : S.route)));
+    const m = $("#main"), y = window.scrollY;
+    const views = { overview: vOverview, incidents: vIncidents, approvals: vApprovals, actions: vActions, audit: vAudit, connectors: vConnectors };
+    m.innerHTML = S.route === "incident" ? await vIncident(S.arg) : (views[S.route] || vOverview)();
+    window.scrollTo(0, y);
+    const q = $("#incQ"); if (q && render.focusQ) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); render.focusQ = false; }
+  }
+
+  async function load() {
     try {
-      const [h, inc, act, aud] = await Promise.all([
-        fetch("/health").then(r => r.json()), api("/api/v1/incidents?limit=500"), api("/api/v1/actions"),
-        S.view === "audit" ? api("/api/v1/audit?limit=300") : Promise.resolve(S.audit)]);
-      Object.assign(S, { health: h, incidents: inc, actions: act, audit: aud });
-      $("#liveDot").classList.remove("off"); $("#liveTxt").textContent = "Actualisé " + new Date().toLocaleTimeString("fr-FR");
-      renderAll();
-    } catch (e) {
-      $("#liveDot").classList.add("off"); $("#liveTxt").textContent = "Hors ligne";
-      if (!$("#login").classList.contains("hidden")) return;
-      toast("Erreur : " + e.message, true);
-    }
+      const [h, inc, act, aud] = await Promise.all([fetch("/health").then(r => r.json()), api("/api/v1/incidents?limit=1000"), api("/api/v1/actions"), api("/api/v1/audit?limit=300")]);
+      Object.assign(S, { health: h, inc, act, audit: aud });
+      $("#ver").textContent = "v" + h.version;
+      $("#mode").textContent = h.mode === "enforce" ? "ENFORCE" : "DRY-RUN"; $("#mode").className = h.mode === "enforce" ? "mode-enf" : "mode-dry";
+      const nInc = inc.filter(i => i.status === "open").length, nApp = act.filter(a => a.status === "pending_approval").length;
+      $("#cInc").textContent = nInc; $("#cInc").classList.toggle("alert", inc.some(i => i.status === "open" && i.severity === "P1"));
+      $("#cApp").textContent = nApp; $("#cApp").classList.toggle("alert", nApp > 0);
+      $("#lastRef").textContent = "Actualisé " + ts(Date.now() / 1000).slice(11) + " UTC";
+      await render();
+    } catch (e) { if (e.message !== "401") { $("#lastRef").textContent = "Échec de l'actualisation"; toast("Erreur : " + e.message, true); } }
   }
 
-  function setView(v) {
-    S.view = v;
-    $$("#nav button").forEach(b => b.classList.toggle("active", b.dataset.view === v));
-    $$("section[data-section]").forEach(s => s.classList.toggle("hidden", s.dataset.section !== v));
-    $("#viewTitle").textContent = VIEWS[v][0]; $("#viewSub").textContent = VIEWS[v][1];
-    store.pref("soar_view", v);
-    if (v === "audit") refresh(); else renderAll();
-  }
+  function schedule() { clearInterval(S.timer); const v = +$("#autoRef").value; ls.set("soar_refresh", v); if (v) S.timer = setInterval(() => { if (!document.hidden && S.route !== "incident") load(); }, v); }
 
-  function showLogin(msg = "") {
-    $("#login").classList.remove("hidden"); $("#loginErr").textContent = msg;
-    $("#key").value = ""; $("#user").value = store.get("soar_user"); $("#key").focus();
-  }
+  function logout(msg) { ss.del("soar_key"); clearInterval(S.timer); $("#appView").classList.add("hidden"); $("#loginView").classList.remove("hidden"); $("#loginErr").textContent = msg || ""; $("#user").value = ss.get("soar_user"); $("#key").focus(); }
+  function enter() { $("#loginView").classList.add("hidden"); $("#appView").classList.remove("hidden"); $("#who").textContent = ss.get("soar_user") || "dashboard"; schedule(); load(); }
 
-  // ---------- événements ----------
-  $("#loginForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    store.set("soar_key", $("#key").value); store.set("soar_user", $("#user").value.trim());
-    try { await api("/api/v1/actions?status=pending_approval"); $("#login").classList.add("hidden"); refresh(); }
+  // ---------- evenements ----------
+  $("#loginForm").addEventListener("submit", async e => {
+    e.preventDefault(); ss.set("soar_key", $("#key").value); ss.set("soar_user", $("#user").value.trim());
+    try { const r = await fetch("/api/v1/actions?status=pending_approval", { headers: { "X-API-Key": $("#key").value } }); if (!r.ok) throw new Error("Clé API refusée."); enter(); }
     catch (err) { $("#loginErr").textContent = err.message; }
   });
-  $("#logoutBtn").onclick = () => { store.del("soar_key"); showLogin(); };
-  $("#refreshBtn").onclick = refresh;
-  $$("#nav button").forEach(b => b.onclick = () => setView(b.dataset.view));
-  $("#incFilters").addEventListener("click", e => { const c = e.target.closest(".chip"); if (!c) return;
-    S.incF = c.dataset.f; $$("#incFilters .chip").forEach(x => x.classList.toggle("on", x === c)); renderIncidents(); });
-  $("#actFilters").addEventListener("click", e => { const c = e.target.closest(".chip"); if (!c) return;
-    S.actF = c.dataset.f; $$("#actFilters .chip").forEach(x => x.classList.toggle("on", x === c)); renderActions(); });
-  $("#incSearch").addEventListener("input", e => { S.q = e.target.value; renderIncidents(); });
-  $("#scrim").onclick = closeDrawer; $("#dClose").onclick = closeDrawer;
-  document.addEventListener("keydown", e => {
-    if (e.key === "Escape") closeDrawer();
-    if (e.key === "Enter" && e.target.matches("tr.click")) openIncident(e.target.dataset.inc);
-  });
+  $("#logoutBtn").onclick = () => logout();
+  $("#refBtn").onclick = load;
+  $("#autoRef").value = ls.get("soar_refresh") ?? "30000"; $("#autoRef").onchange = schedule;
+  window.addEventListener("hashchange", () => { S.tab = "summary"; render(); });
 
-  async function decide(id, verb) {
-    try { const a = await api(`/api/v1/actions/${encodeURIComponent(id)}/${verb}`, { method: "POST", body: "{}" });
-      toast(verb === "approve" ? `Action approuvée : ${ACT_ST[a.status]?.[0] || a.status}` : "Action rejetée");
-      await refresh(); if (S.openId) openIncident(S.openId);
-    } catch (e) { toast(e.message, true); }
-  }
   document.addEventListener("click", async e => {
-    const t = e.target.closest("[data-approve],[data-reject],[data-open],[data-goto],[data-status],tr[data-inc]");
+    const t = e.target.closest("th.sort,[data-pg],[data-approve],[data-reject],[data-status],[data-tab],[data-cmd],tr.rowlink");
     if (!t) return;
-    if (t.dataset.approve) return decide(t.dataset.approve, "approve");
-    if (t.dataset.reject) return decide(t.dataset.reject, "reject");
-    if (t.dataset.goto) return setView(t.dataset.goto);
-    if (t.dataset.open) { e.preventDefault(); return openIncident(t.dataset.open); }
-    if (t.dataset.status) {
-      try { await api(`/api/v1/incidents/${encodeURIComponent(S.openId)}/status`, { method: "POST", body: JSON.stringify({ status: t.dataset.status }) });
-        toast("Statut mis à jour"); await refresh(); openIncident(S.openId); } catch (err) { toast(err.message, true); }
+    if (t.matches("th.sort")) { const st = S.tables[t.dataset.t]; st.dir = st.k === t.dataset.k && st.dir === "desc" ? "asc" : "desc"; st.k = t.dataset.k; return render(); }
+    if (t.dataset.pg) { S.tables[t.dataset.pg].page += +t.dataset.d; return render(); }
+    if (t.dataset.tab) { e.preventDefault(); S.tab = t.dataset.tab; return render(); }
+    if (t.dataset.cmd) {
+      const c = t.dataset.cmd;
+      if (c === "refresh") return load();
+      if (c === "closepane") { location.hash = "#/incidents"; return; }
+      if (c === "last24") S.incRange = "24h";
+      if (c === "p1") S.incSev = "P1";
+      if (c === "reset") { S.incRange = "all"; S.incSev = "all"; S.incStatus = "active"; S.incQ = ""; }
+      return render();
+    }
+    if (t.dataset.approve || t.dataset.reject) {
+      const id = t.dataset.approve || t.dataset.reject, verb = t.dataset.approve ? "approve" : "reject";
+      try { const a = await api(`/api/v1/actions/${encodeURIComponent(id)}/${verb}`, { method: "POST", body: "{}" }); toast(`${id} : ${AST[a.status] || a.status}`); load(); } catch (err) { toast(err.message, true); }
       return;
     }
-    if (t.dataset.inc) openIncident(t.dataset.inc);
+    if (t.dataset.status) {
+      try { await api(`/api/v1/incidents/${encodeURIComponent(t.dataset.id)}/status`, { method: "POST", body: JSON.stringify({ status: t.dataset.status }) }); toast(`${t.dataset.id} : ${IST[t.dataset.status]}`); load(); } catch (err) { toast(err.message, true); }
+      return;
+    }
+    if (t.matches("tr.rowlink") && !e.target.closest("a,button")) location.hash = t.dataset.href;
   });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Enter" && e.target.matches("tr.rowlink")) location.hash = e.target.dataset.href;
+    if (e.key === "Enter" && e.target.matches("th.sort")) e.target.click();
+  });
+  document.addEventListener("change", e => {
+    if (e.target.dataset.size) { const st = S.tables[e.target.dataset.size]; st.size = +e.target.value; st.page = 0; render(); }
+    if (e.target.id === "incStatus") { S.incStatus = e.target.value; render(); }
+    if (e.target.id === "incRange") { S.incRange = e.target.value; render(); }
+    if (e.target.id === "incSev") { S.incSev = e.target.value; render(); }
+    if (e.target.id === "actStatus") { S.actStatus = e.target.value; render(); }
+  });
+  document.addEventListener("input", e => { if (e.target.id === "incQ") { S.incQ = e.target.value; if (S.tables.inc) S.tables.inc.page = 0; render.focusQ = true; clearTimeout(render.d); render.d = setTimeout(render, 150); } });
 
-  // thème
-  function applyTheme(th) { document.documentElement.dataset.theme = th; $("#themeBtn").textContent = th === "dark" ? "Thème clair" : "Thème sombre"; }
-  applyTheme(store.pref("soar_theme") || "dark");
-  $("#themeBtn").onclick = () => { const th = document.documentElement.dataset.theme === "dark" ? "light" : "dark"; store.pref("soar_theme", th); applyTheme(th); };
+  function theme(t) { document.documentElement.dataset.theme = t; $("#themeBtn").textContent = t === "dark" ? "Clair" : "Sombre"; ls.set("soar_theme", t); }
+  theme(ls.get("soar_theme") || "light");
+  $("#themeBtn").onclick = () => theme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
 
-  // démarrage
-  const v = store.pref("soar_view"); if (v && VIEWS[v]) setView(v);
-  if (store.get("soar_key")) { $("#login").classList.add("hidden"); refresh(); } else showLogin();
-  setInterval(() => { if ($("#login").classList.contains("hidden")) refresh(); }, 10000);
+  if (ss.get("soar_key")) enter(); else logout();
 })();
 </script>
 </body>

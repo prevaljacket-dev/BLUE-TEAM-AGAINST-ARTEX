@@ -65,14 +65,12 @@ docker compose --profile shipper up -d
 
 ## Utilisation au quotidien
 
-- **Tableau de bord** (`http://127.0.0.1:8080`) : thème sombre de type SOC (thème clair disponible), adapté au mobile.
-  - *Vue d'ensemble* : indicateurs clés (incidents actifs, P1, décisions en attente, IP bloquées ou à bloquer),
-    progression des attaques par étape, répartition par gravité, actions à traiter, incidents récents.
-  - *Incidents* : filtres (actifs, P1/P2/P3, ARTEX confirmé, clos) et recherche. Un clic ouvre le détail :
-    score, étape atteinte, techniques ATT&CK, indicateurs (ceux qui ont abouti sont signalés), chronologie
-    de la réponse avec les commandes exécutées ou simulées, requêtes observées, boutons Clore / Faux positif.
-  - *Approbations* : boutons Approuver / Rejeter pour les actions sensibles (isolation).
-  - *Actions* et *Audit* : historique complet, filtrable.
+- **Tableau de bord** (`http://127.0.0.1:8080`) : console d'analyste dans l'esprit des SIEM (clair par défaut, sombre au choix), horodatages en UTC.
+  - *Synthèse* : compteurs, actions de réponse par heure sur 24 h, sources les plus actives, indicateurs les plus fréquents, file d'approbation.
+  - *Incidents* : résumé par gravité (élevée / moyenne / faible = P1 / P2 / P3), recherche avec filtres `ip:`, `sev:`, `target:`, `stage:`, `status:`,
+    filtres de gravité, de statut et de période, colonnes triables, pagination. Un clic sur une ligne ouvre un volet d'aperçu ;
+    « Afficher tous les détails » ouvre la page de l'incident (entités, tactiques ATT&CK, indicateurs, réponse, requêtes, JSON).
+  - *File d'approbation*, *Journal des actions*, *Connecteurs & playbooks*, *Audit*.
 
   ![Détail d'un incident](docs/dashboard-incident.png)
 - **API** : documentation interactive sur `/docs`. Clé dans `X-API-Key`, nom de l'analyste dans
