@@ -1,0 +1,73 @@
+# Configuration ARTEX SOAR pour le LABO (docker compose dans soar/lab).
+# Ici le blocage est REEL mais ne touche que la cible de labo (fichier RewriteMap d'Apache).
+# Le pare-feu (nftables) reste en simulation : il montre la commande qu'il aurait lancee.
+mode: enforce                # SOAR_MODE=dry_run pour tout simuler et voir la chaine complete
+
+database: data/soar.db
+
+detection:
+  min_score: 30
+  burst_threshold: 50
+  incident_timeout: 3600
+
+guard:
+  protected_networks: ["127.0.0.0/8", "::1/128"]
+  authorized_sources: []
+  authorized_engagements: []
+  max_blocks_per_hour: 50
+
+inventory:
+  hosts: [lab-target]        # seul serveur que le SOAR a le droit d'isoler
+
+connectors:
+  log:
+    type: log
+    path: data/notifications.log
+  ticket:
+    type: ticket_file
+    directory: data/tickets
+  evidence:
+    type: evidence
+    directory: data/evidence
+    log_files: [/lab-logs/access.log]
+  nftables:
+    type: nftables
+    dry_run: true
+  lab_block:
+    type: blocklist_file
+    dry_run: false
+    format: rewritemap
+    path: /lab-control/blocked.txt
+    default_ttl: 3600
+  lab_isolation:
+    type: command
+    dry_run: false
+    argv: ["touch", "/lab-control/quarantine"]
+
+playbooks:
+  - name: p3-reconnaissance
+    when: {min_severity: P3, min_score: 60}
+    actions:
+      - {type: notify, connector: log}
+      - {type: open_ticket, connector: ticket}
+
+  - name: p3-artex-confirme
+    when: {artex_confirmed: true}
+    actions:
+      - {type: block_ip, connector: lab_block, params: {ttl: 3600}}
+      - {type: block_ip, connector: nftables, params: {ttl: 3600}}
+
+  - name: p2-exploitation
+    when: {min_severity: P2}
+    actions:
+      - {type: open_ticket, connector: ticket}
+      - {type: block_ip, connector: lab_block, params: {ttl: 3600}}
+      - {type: block_ip, connector: nftables, params: {ttl: 3600}}
+      - {type: notify, connector: log, params: {title: "Exploitation en cours"}}
+
+  - name: p1-compromission
+    when: {min_severity: P1}
+    actions:
+      - {type: collect_evidence, connector: evidence}
+      - {type: notify, connector: log, params: {title: "COMPROMISSION PROBABLE"}}
+      - {type: isolate_host, connector: lab_isolation, require_approval: true}

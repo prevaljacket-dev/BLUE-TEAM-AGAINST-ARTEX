@@ -14,6 +14,7 @@ class BlocklistFileConnector(Connector):
 
     format: nginx  -> "deny 198.51.100.66;"  (a inclure dans un bloc server/http)
     format: plain  -> une IP par ligne (HAProxy, ModSecurity, WAF...)
+    format: rewritemap -> "198.51.100.66 blocked" (RewriteMap txt d'Apache, relu sans redemarrage)
     reload_command: commande optionnelle apres ecriture, ex. ["nginx", "-s", "reload"]
     """
     disruptive = True
@@ -38,7 +39,11 @@ class BlocklistFileConnector(Connector):
         lines = ["# Genere par ARTEX SOAR - ne pas editer a la main"]
         for addr, meta in sorted(state.items()):
             exp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(meta["expires"]))
-            lines.append((f"deny {addr};" if fmt == "nginx" else addr) + f"  # expire {exp} {meta['incident']}")
+            if fmt == "rewritemap":  # pas de commentaire en fin de ligne dans une RewriteMap
+                lines.append(f"# expire {exp} {meta['incident']}")
+                lines.append(f"{addr} blocked")
+            else:
+                lines.append((f"deny {addr};" if fmt == "nginx" else addr) + f"  # expire {exp} {meta['incident']}")
         content = "\n".join(lines) + "\n"
         reload_cmd = self.cfg.get("reload_command")
         if dry_run:

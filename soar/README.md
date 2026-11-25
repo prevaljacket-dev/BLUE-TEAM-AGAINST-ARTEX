@@ -20,6 +20,13 @@ règles Suricata/Sigma/YARA, `playbook/PLAYBOOK.md`) et le rend automatique :
 
 ![Tableau de bord ARTEX SOAR](docs/dashboard.png)
 
+## Tester contre ARTEX
+
+- [docs/COUVERTURE-ARTEX.md](docs/COUVERTURE-ARTEX.md) : les 35 attaques possibles d'ARTEX, avec
+  pour chacune la détection, la réponse et les limites.
+- [lab/README.md](lab/README.md) : un labo Docker avec une cible vulnérable à toi. Tu lances ARTEX
+  dessus et tu regardes le SOAR bloquer puis isoler (pas à pas pour Windows).
+
 ## Sécurité par défaut
 
 | Garde-fou | Effet |
@@ -80,6 +87,8 @@ docker compose --profile shipper up -d
 |---|---|---|
 | GET | `/health` | état, mode, connecteurs (et s'ils sont en dry-run), playbooks |
 | POST | `/api/v1/ingest/access-log?target=web01` | lignes de journal combined (texte brut) |
+| POST | `/api/v1/ingest/auth-log?target=web01` | `auth.log` (sshd) : échecs et connexions réussies |
+| POST | `/api/v1/ingest/firewall-log` | journal noyau du pare-feu (`SRC= DST= DPT=`) : scans de ports |
 | POST | `/api/v1/ingest/suricata` | EVE JSON (une alerte par ligne ou tableau) |
 | POST | `/api/v1/ingest/triage` | rapport JSON de `artex_triage.py logs` ou `host` |
 | POST | `/api/v1/events` | événements normalisés (voir `docs/ARCHITECTURE.md`) |

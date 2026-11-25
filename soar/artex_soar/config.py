@@ -15,6 +15,7 @@ DEFAULTS: Dict[str, Any] = {
         "burst_threshold": 50,       # requetes / 10 s
         "incident_timeout": 3600,    # secondes d'inactivite avant d'ouvrir un nouvel incident
         "max_tracked_sources": 100000,
+        "home_networks": [],         # vos reseaux (ex. 10.0.0.0/8) pour reconnaitre le trafic sortant
     },
     "guard": {
         # Jamais bloquees : vos propres equipements, la supervision, le SOAR lui-meme.

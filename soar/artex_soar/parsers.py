@@ -107,3 +107,54 @@ def parse_generic(items: Iterable[Dict[str, Any]], now: float = 0.0) -> List[Eve
         data.setdefault("kind", "http")
         events.append(Event(**data))
     return events
+
+
+# -- journaux systeme ---------------------------------------------------------------------
+import re as _re
+
+_SYSLOG_TS = _re.compile(r"^(?P<ts>\d{4}-\d{2}-\d{2}T\S+|[A-Z][a-z]{2}\s+\d{1,2}\s\d{2}:\d{2}:\d{2})\s+(?P<host>\S+)\s")
+_AUTH_FAIL = _re.compile(r"(Failed (password|publickey|keyboard-interactive\S*) for (invalid user )?(?P<user>\S+)"
+                         r"|Invalid user (?P<user2>\S+)|authentication failure;.*?rhost=)"
+                         r".*?(from |rhost=)(?P<ip>[0-9a-fA-F.:]+)")
+_AUTH_OK = _re.compile(r"Accepted (password|publickey|keyboard-interactive\S*) for (?P<user>\S+) from (?P<ip>[0-9a-fA-F.:]+)")
+_FW = _re.compile(r"SRC=(?P<src>[0-9a-fA-F.:]+)\s+DST=(?P<dst>[0-9a-fA-F.:]+).*?PROTO=(?P<proto>\w+)"
+                  r"(?:.*?DPT=(?P<dpt>\d+))?")
+
+
+def _syslog_ts(line: str, now: float):
+    m = _SYSLOG_TS.match(line)
+    if not m:
+        return now, None
+    raw = m.group("ts")
+    if raw[:4].isdigit():
+        return _iso_ts(raw, now), m.group("host")
+    try:
+        dt = datetime.strptime(f"{datetime.now().year} {raw}", "%Y %b %d %H:%M:%S")
+        return dt.timestamp(), m.group("host")
+    except ValueError:
+        return now, m.group("host")
+
+
+def parse_auth_log(lines: Iterable[str], target: Optional[str] = None, now: float = 0.0) -> Iterator[Event]:
+    """/var/log/auth.log (sshd, PAM) : echecs -> 'auth', connexions reussies -> 'auth_success'."""
+    for line in lines:
+        m_ok = _AUTH_OK.search(line)
+        m = m_ok or _AUTH_FAIL.search(line)
+        if not m:
+            continue
+        ts, host = _syslog_ts(line, now)
+        kind = "auth_success" if m_ok else "auth"
+        user = m.groupdict().get("user") or m.groupdict().get("user2") or ""
+        yield Event(ts=ts, kind=kind, source_ip=m.group("ip"), target=target or host, sensor="auth",
+                    signature=f"ssh {user}".strip(), raw=line.rstrip("\n")[:2000])
+
+
+def parse_firewall_log(lines: Iterable[str], target: Optional[str] = None, now: float = 0.0) -> Iterator[Event]:
+    """Journal noyau iptables/nftables (prefixe LOG) : une connexion refusee -> 'conn', signature = port vise."""
+    for line in lines:
+        m = _FW.search(line)
+        if not m:
+            continue
+        ts, host = _syslog_ts(line, now)
+        yield Event(ts=ts, kind="conn", source_ip=m.group("src"), target=target or m.group("dst"),
+                    sensor="firewall", signature=m.group("dpt") or m.group("proto"), raw=line.rstrip("\n")[:2000])
